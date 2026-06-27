@@ -9,6 +9,7 @@ export type AuthDomainResource =
    | 'author-organization-invitation'
    | 'subscription-plan'
    | 'user-subscription'
+   | 'subscription-catalog'
    | 'user-device';
 
 export interface CacheInvalidateEvent {

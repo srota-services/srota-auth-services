@@ -24,6 +24,7 @@ import { SubscriptionError } from '../types/subscription';
 import { subscriptionMessages } from '../utils/subscriptionMessages';
 import { computeProration } from '../utils/subscriptionProration';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { emitSubscriptionCatalogInvalidation } from './subscriptionCatalogInvalidation';
 
 const planMsg = subscriptionMessages.error.subscription_plans;
 const subMsg = subscriptionMessages.error.user_subscriptions;
@@ -127,6 +128,12 @@ export class UserSubscriptionService {
             include: subscriptionInclude,
          });
          emitCacheInvalidation('user-subscription', 'created', created.id, { userId: data.userId });
+         emitSubscriptionCatalogInvalidation({
+            userId: data.userId,
+            subscriptionId: created.id,
+            planId: data.planId,
+            action: 'created',
+         });
          return toUserSubscriptionWithPlan(created);
       } catch (error) {
          if (error instanceof SubscriptionError) throw error;
@@ -236,6 +243,14 @@ export class UserSubscriptionService {
          }
          const updated = await this.prisma.userSubscription.update({ where: { id }, data: updateData });
          emitCacheInvalidation('user-subscription', 'updated', id, { userId: existing.userId });
+         if (!cancelAtPeriodEnd) {
+            emitSubscriptionCatalogInvalidation({
+               userId: existing.userId,
+               subscriptionId: id,
+               planId: existing.planId,
+               action: 'updated',
+            });
+         }
          return toUserSubscriptionDto(updated);
       } catch (error) {
          if (error instanceof SubscriptionError) throw error;
@@ -335,6 +350,12 @@ export class UserSubscriptionService {
 
             emitCacheInvalidation('user-subscription', 'updated', subscriptionId, {
                userId: existing.userId,
+            });
+            emitSubscriptionCatalogInvalidation({
+               userId: existing.userId,
+               subscriptionId,
+               planId: newPlanId,
+               action: 'updated',
             });
             return {
                changeType: PlanChangeType.UPGRADE,
@@ -490,6 +511,14 @@ export class UserSubscriptionService {
          });
 
          emitCacheInvalidation('user-subscription', 'updated', id, { userId: existing.userId });
+         if (pendingPlanToApply) {
+            emitSubscriptionCatalogInvalidation({
+               userId: existing.userId,
+               subscriptionId: id,
+               planId: pendingPlanToApply.id,
+               action: 'updated',
+            });
+         }
          return toUserSubscriptionDto(updated);
       } catch (error) {
          if (error instanceof SubscriptionError) throw error;

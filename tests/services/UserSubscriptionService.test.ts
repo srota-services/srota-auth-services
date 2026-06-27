@@ -2,6 +2,16 @@ import { BillingInterval, SubscriptionStatus } from '@prisma/client';
 import { UserSubscriptionService } from '../../src/services/UserSubscriptionService';
 import { SubscriptionError } from '../../src/types/subscription';
 
+jest.mock('../../src/services/DomainEventPublisher', () => ({
+   emitCacheInvalidation: jest.fn(),
+}));
+
+jest.mock('../../src/services/subscriptionCatalogInvalidation', () => ({
+   emitSubscriptionCatalogInvalidation: jest.fn(),
+}));
+
+import { emitSubscriptionCatalogInvalidation } from '../../src/services/subscriptionCatalogInvalidation';
+
 const basePlan = {
    id: 'plan_base',
    name: 'Base',
@@ -137,6 +147,12 @@ describe('UserSubscriptionService', () => {
                }),
             })
          );
+         expect(emitSubscriptionCatalogInvalidation).toHaveBeenCalledWith({
+            userId: 'user-uuid',
+            subscriptionId: 'sub1',
+            planId: standardPlan.id,
+            action: 'updated',
+         });
       });
 
       it('schedules downgrade without changing current planId', async () => {
@@ -173,6 +189,7 @@ describe('UserSubscriptionService', () => {
                }),
             })
          );
+         expect(emitSubscriptionCatalogInvalidation).not.toHaveBeenCalled();
       });
 
       it('rejects same plan', async () => {
@@ -248,6 +265,12 @@ describe('UserSubscriptionService', () => {
                }),
             })
          );
+         expect(emitSubscriptionCatalogInvalidation).toHaveBeenCalledWith({
+            userId: 'user-uuid',
+            subscriptionId: 'sub1',
+            planId: standardPlan.id,
+            action: 'updated',
+         });
       });
    });
 });

@@ -39,4 +39,22 @@ describe('buildCacheInvalidationEvent (auth)', () => {
          ]),
       );
    });
+
+   it('builds subscription-catalog keys including subscriptions and audiobooks', () => {
+      const event = buildCacheInvalidationEvent('subscription-catalog', 'updated', 'sub-1', {
+         userId: 'user-1',
+         planId: 'plan-1',
+      });
+
+      expect(event.queryKeys).toEqual(
+         expect.arrayContaining([
+            ['subscriptions'],
+            ['subscriptions', 'me'],
+            ['audiobooks'],
+            ['user-audiobooks'],
+            ['user-audiobooks', 'me'],
+         ]),
+      );
+      expect(event.relatedIds).toEqual({ userId: 'user-1', planId: 'plan-1' });
+   });
 });
