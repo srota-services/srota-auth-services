@@ -254,7 +254,7 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction): 
 export const corsOptions = {
    origin: true,
    credentials: true,
-   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
 };
 

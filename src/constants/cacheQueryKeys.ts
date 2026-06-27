@@ -40,6 +40,23 @@ function keysForResource(
             ['organizations'],
          ];
       }
+      case 'author-organization-invitation': {
+         const orgId = relatedIds['organizationId'];
+         const authorId = relatedIds['authorId'];
+         const keys: string[][] = [['author-organization-invitations']];
+         if (orgId) {
+            keys.push(
+               ['organizations', orgId, 'author-invitations'],
+               ['organizations', orgId, 'authors'],
+               ['organizations', orgId],
+            );
+         }
+         if (authorId) {
+            keys.push(['authors', authorId, 'organization-invitations']);
+         }
+         keys.push(['authors', 'me', 'organization-invitations']);
+         return keys;
+      }
       case 'subscription-plan':
          return [['subscription-plans'], ['subscription-plans', id]];
       case 'user-subscription':

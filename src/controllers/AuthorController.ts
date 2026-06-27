@@ -123,7 +123,7 @@ export class AuthorController {
             createData.userId = getUserId(req);
          }
 
-         const author = await this.authorService.createAuthor(createData);
+         const author = await this.authorService.createAuthor(createData, isAdmin);
          res.status(201).json({
             message: domainMessages.success.authors.created,
             author,
@@ -148,7 +148,10 @@ export class AuthorController {
             ...(organizationIds !== undefined ? { organizationIds } : {}),
          };
 
-         const author = await this.authorService.updateAuthor(id, updateData);
+         const authReq = req as AuthenticatedRequest;
+         const isAdmin = isGlobalAdminRole(authReq.user?.role);
+
+         const author = await this.authorService.updateAuthor(id, updateData, isAdmin);
          res.status(200).json({
             message: domainMessages.success.authors.updated,
             author,

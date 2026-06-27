@@ -326,6 +326,206 @@
 
 /**
  * @swagger
+ * /auth/organizations/{organizationId}/author-invitations:
+ *   get:
+ *     summary: List author invitations for an organization
+ *     tags: [AuthorInvitations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: organizationId
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Invitations retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string }
+ *                 invitations:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/AuthorOrganizationInvitationForOrg' }
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ *   post:
+ *     summary: Send an author invitation
+ *     tags: [AuthorInvitations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: organizationId
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/CreateAuthorOrganizationInvitationRequest' }
+ *     responses:
+ *       201:
+ *         description: Invitation created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string }
+ *                 invitation: { $ref: '#/components/schemas/AuthorOrganizationInvitationForOrg' }
+ *       409:
+ *         description: Author already linked or invitation already pending
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ */
+
+/**
+ * @swagger
+ * /auth/organizations/{organizationId}/authors:
+ *   get:
+ *     summary: List authors linked to an organization
+ *     description: Returns id, name, email, and contact only. Slugs are not included.
+ *     tags: [AuthorInvitations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: organizationId
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Linked authors retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string }
+ *                 authors:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/OrganizationAuthorMember' }
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ */
+
+/**
+ * @swagger
+ * /auth/authors/me/organization-invitations:
+ *   get:
+ *     summary: List organization invitations for the logged-in author
+ *     description: Organization summaries exclude slug fields.
+ *     tags: [AuthorInvitations]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Invitations retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string }
+ *                 invitations:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/AuthorOrganizationInvitationForAuthor' }
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ */
+
+/**
+ * @swagger
+ * /auth/authors/me/organization-invitations/{invitationId}/reveal-contact:
+ *   patch:
+ *     summary: Author consent to share contact info with organization
+ *     tags: [AuthorInvitations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: invitationId
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/RevealContactRequest' }
+ *     responses:
+ *       200:
+ *         description: Contact reveal decision recorded
+ *       409:
+ *         description: Invalid invitation state
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ */
+
+/**
+ * @swagger
+ * /auth/authors/me/organization-invitations/{invitationId}/confirm-contact:
+ *   patch:
+ *     summary: Author confirms whether the organization has contacted them
+ *     tags: [AuthorInvitations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: invitationId
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/ConfirmOrgContactRequest' }
+ *     responses:
+ *       200:
+ *         description: Contact confirmation recorded
+ *       409:
+ *         description: Invalid invitation state
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ */
+
+/**
+ * @swagger
+ * /auth/authors/me/organization-invitations/{invitationId}/join:
+ *   patch:
+ *     summary: Author accepts or declines joining the organization
+ *     tags: [AuthorInvitations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: invitationId
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/JoinOrganizationInvitationRequest' }
+ *     responses:
+ *       200:
+ *         description: Join decision recorded
+ *       409:
+ *         description: Invalid invitation state
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ */
+
+/**
+ * @swagger
  * /auth/catalog/organizations/{id}:
  *   get:
  *     summary: Get organization catalog entry

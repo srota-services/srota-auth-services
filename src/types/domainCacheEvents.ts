@@ -6,6 +6,7 @@ export type AuthDomainResource =
    | 'author'
    | 'organization'
    | 'organization-member'
+   | 'author-organization-invitation'
    | 'subscription-plan'
    | 'user-subscription'
    | 'user-device';
