@@ -128,6 +128,19 @@ export const registerRateLimit = rateLimit({
 });
 
 /**
+ * Rate limiting middleware for guest session creation
+ */
+export const guestRateLimit = rateLimit({
+   windowMs: 60 * 60 * 1000, // 1 hour
+   max: 30, // 30 guest sessions per hour per IP
+   message: {
+      error: 'Too many guest session requests, please try again later',
+   },
+   standardHeaders: true,
+   legacyHeaders: false,
+});
+
+/**
  * General rate limiting middleware
  */
 export const generalRateLimit = rateLimit({

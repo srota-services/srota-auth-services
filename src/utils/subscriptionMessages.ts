@@ -36,6 +36,7 @@ export const subscriptionMessages = {
       user_subscriptions: {
          not_found: 'User subscription not found',
          already_subscribed: 'User already has an active subscription',
+         guest_not_allowed: 'Guest accounts must register before subscribing',
          already_canceled: 'Subscription is already canceled or expired',
          lifetime_no_renew: 'Lifetime subscriptions cannot be renewed',
          cannot_renew_canceled: 'Cannot renew a canceled subscription',

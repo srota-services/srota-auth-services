@@ -9,6 +9,7 @@ import { appLogger } from '../utils/logger';
 import { ClientType } from '../constants/clientType';
 import { OAuthClientApp } from '../constants/oauthClientApp';
 import { isPartnerAppRole, isOrgAdminRole, isOrgCoordinatorRole, isGlobalAuthorRole } from '../constants/authRoles';
+import { buildGuestEmail, isGuestEmail } from '../constants/guestUser';
 import { AuthorService } from './AuthorService';
 import { OrganizationService } from './OrganizationService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
@@ -24,6 +25,7 @@ import {
    ForgotPasswordRequest,
    ResetPasswordRequest,
    GoogleOAuthRequest,
+   GuestAuthRequest,
    VerifyOTPRequest,
    ChangePasswordRequest,
    UpdateEmailRequest,
@@ -396,6 +398,10 @@ export class AuthService {
    async forgotPassword(data: ForgotPasswordRequest): Promise<void> {
       const { email } = data;
 
+      if (isGuestEmail(email)) {
+         return;
+      }
+
       const user = await prisma.user.findUnique({
          where: { email: email.toLowerCase() },
       });
@@ -687,6 +693,35 @@ export class AuthService {
       }
 
       return this.issueAuthTokens(user, data.device, data.meta);
+   }
+
+   /**
+    * Create or resume an anonymous guest session bound to a device.
+    */
+   async createOrResumeGuestSession(
+      data: GuestAuthRequest & { meta?: DeviceRequestMeta },
+   ): Promise<AuthResponse> {
+      const { device } = data;
+
+      const existingDevice = await prisma.userDevice.findFirst({
+         where: {
+            deviceId: device.deviceId,
+            user: { role: Role.GUEST },
+         },
+         include: { user: true },
+         orderBy: { lastSeenAt: 'desc' },
+      });
+
+      const user = existingDevice?.user ?? await prisma.user.create({
+         data: {
+            email: buildGuestEmail(),
+            password: null,
+            role: Role.GUEST,
+            emailVerified: true,
+         },
+      });
+
+      return this.issueAuthTokens(user, device, data.meta);
    }
 
    /**

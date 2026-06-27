@@ -8,6 +8,7 @@ import {
    loginRateLimit,
    passwordResetRateLimit,
    registerRateLimit,
+   guestRateLimit,
    generalRateLimit,
    validateCsrf,
 } from '../middleware';
@@ -33,6 +34,7 @@ router.post('/verify-registration-otp', loginRateLimit, authController.verifyReg
 router.post('/resend-otp', loginRateLimit, authController.resendOTP.bind(authController));
 router.post('/login/mobile', loginRateLimit, authController.mobileLogin.bind(authController));
 router.post('/google', loginRateLimit, validateCsrf, authController.googleOAuth.bind(authController));
+router.post('/guest', guestRateLimit, validateCsrf, authController.createGuestSession.bind(authController));
 router.post('/refresh', validateCsrf, authController.refreshToken.bind(authController));
 router.post('/logout', validateCsrf, authController.logout.bind(authController));
 router.post('/verify-email', authController.verifyEmail.bind(authController));

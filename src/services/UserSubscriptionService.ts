@@ -25,6 +25,7 @@ import { subscriptionMessages } from '../utils/subscriptionMessages';
 import { computeProration } from '../utils/subscriptionProration';
 import { emitCacheInvalidation } from './DomainEventPublisher';
 import { emitSubscriptionCatalogInvalidation } from './subscriptionCatalogInvalidation';
+import { isGuestRole } from '../constants/authRoles';
 
 const planMsg = subscriptionMessages.error.subscription_plans;
 const subMsg = subscriptionMessages.error.user_subscriptions;
@@ -95,6 +96,9 @@ export class UserSubscriptionService {
       try {
          const user = await this.prisma.user.findUnique({ where: { id: data.userId } });
          if (!user) throw SubscriptionError.notFound(subscriptionMessages.error.not_found.user);
+         if (isGuestRole(user.role)) {
+            throw SubscriptionError.forbidden(subMsg.guest_not_allowed);
+         }
          const plan = await this.prisma.subscriptionPlan.findUnique({ where: { id: data.planId } });
          if (!plan) throw SubscriptionError.notFound(planMsg.not_found);
          if (!plan.isActive) throw SubscriptionError.validation(planMsg.inactive);

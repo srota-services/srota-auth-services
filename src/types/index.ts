@@ -119,6 +119,11 @@ export interface GoogleOAuthRequest {
    device: DeviceContext;
 }
 
+export interface GuestAuthRequest {
+   clientType?: ClientTypeValue;
+   device: DeviceContext;
+}
+
 // Response interfaces
 export interface AuthResponse {
    accessToken: string;
