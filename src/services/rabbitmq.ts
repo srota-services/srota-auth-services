@@ -291,6 +291,59 @@ export class RabbitMQService {
    }
 
    /**
+    * Publish subscription changed event (effective tier/access change)
+    */
+   async publishSubscriptionChanged(data: {
+      userId: string;
+      subscriptionId: string;
+      planId: string;
+      action: string;
+   }): Promise<void> {
+      if (!this.isServiceConnected()) {
+         throw new Error('RabbitMQ service is not connected');
+      }
+
+      try {
+         const message = JSON.stringify({
+            userId: data.userId,
+            subscriptionId: data.subscriptionId,
+            planId: data.planId,
+            action: data.action,
+         });
+         const routingKey = 'user.subscription.changed';
+
+         const published = this.channel!.publish(
+            config.RABBITMQ_EXCHANGE,
+            routingKey,
+            Buffer.from(message),
+            {
+               persistent: true,
+               timestamp: Date.now(),
+            }
+         );
+
+         if (!published) {
+            throw new Error('Failed to publish message to RabbitMQ');
+         }
+
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.info(
+               { userId: data.userId, subscriptionId: data.subscriptionId, routingKey },
+               'Published user.subscription.changed event',
+            );
+         }
+      } catch (error) {
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.error(
+               { err: error, userId: data.userId, subscriptionId: data.subscriptionId },
+               'Error publishing user.subscription.changed event',
+            );
+         }
+         throw error;
+      }
+   }
+
+   /**
     * Publish user deleted event (stub for future user delete API)
     */
    async publishUserDeleted(data: { userId: string; authorId?: string }): Promise<void> {

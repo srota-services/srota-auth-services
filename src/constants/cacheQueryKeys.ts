@@ -61,6 +61,14 @@ function keysForResource(
          return [['subscription-plans'], ['subscription-plans', id]];
       case 'user-subscription':
          return [['subscriptions'], ['subscriptions', 'me'], ['subscriptions', id]];
+      case 'subscription-catalog':
+         return [
+            ['subscriptions'],
+            ['subscriptions', 'me'],
+            ['audiobooks'],
+            ['user-audiobooks'],
+            ['user-audiobooks', 'me'],
+         ];
       case 'user-device':
          return [['devices'], ['devices', id]];
       default:
