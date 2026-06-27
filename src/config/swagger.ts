@@ -225,7 +225,12 @@ const options: swaggerJsdoc.Options = {
                properties: {
                   id: { type: 'string' },
                   name: { type: 'string', example: 'Premium' },
-                  tierLevel: { type: 'integer', example: 2 },
+                  tierLevel: {
+                     type: 'integer',
+                     example: 2,
+                     description:
+                        'Hierarchical access tier. app-service compares this against audiobook/chapter minSubscriptionTier for content gating.',
+                  },
                   price: { type: 'number', example: 9.99 },
                   currency: { type: 'string', example: 'USD' },
                   interval: { type: 'string', example: 'month' },
@@ -447,7 +452,7 @@ const options: swaggerJsdoc.Options = {
                type: 'object',
                required: ['version', 'service', 'resource', 'action', 'id', 'queryKeys', 'timestamp'],
                description:
-                  'TanStack Query cache-invalidation payload emitted on SSE event `cache-invalidate`. Loop queryKeys and call queryClient.invalidateQueries({ queryKey }) for each. For `subscription-catalog`, skip when relatedIds.userId does not match the current user; use removeQueries then invalidateQueries so tier-gated audiobook/chapter cache is cleared and refetched.',
+                  'TanStack Query cache-invalidation payload emitted on SSE event `cache-invalidate`. Loop queryKeys and call queryClient.invalidateQueries({ queryKey }) for each. For `subscription-catalog`, skip when relatedIds.userId does not match the current user; use removeQueries then invalidateQueries so tier-gated audiobook/chapter cache is cleared and refetched. For `subscription-gating`, invalidate when subscription plan tier definitions change (includes audiobook catalog keys; prefix `audiobooks` covers chapter queries).',
                properties: {
                   version: { type: 'integer', example: 1 },
                   service: { type: 'string', enum: ['auth'], example: 'auth' },
@@ -455,7 +460,7 @@ const options: swaggerJsdoc.Options = {
                      type: 'string',
                      example: 'organization',
                      description:
-                        'Stable entity name (user, organization, subscription-plan, user-subscription, subscription-catalog, …). subscription-catalog is emitted when effective subscription tier/access changes and includes catalog query keys (audiobooks, user-audiobooks).',
+                        'Stable entity name (user, organization, subscription-plan, user-subscription, subscription-catalog, subscription-gating, …). subscription-catalog is emitted when a user effective subscription tier changes. subscription-gating is emitted when subscription plan tier definitions change.',
                   },
                   action: { type: 'string', enum: ['created', 'updated', 'deleted'] },
                   id: { type: 'string', example: 'corg1234567890abcdefghij' },

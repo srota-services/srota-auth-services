@@ -344,6 +344,55 @@ export class RabbitMQService {
    }
 
    /**
+    * Publish subscription gating changed event (plan tier definition change)
+    */
+   async publishSubscriptionGatingChanged(data: {
+      action: string;
+      planId: string;
+   }): Promise<void> {
+      if (!this.isServiceConnected()) {
+         throw new Error('RabbitMQ service is not connected');
+      }
+
+      try {
+         const message = JSON.stringify({
+            action: data.action,
+            planId: data.planId,
+         });
+         const routingKey = 'subscription.gating.changed';
+
+         const published = this.channel!.publish(
+            config.RABBITMQ_EXCHANGE,
+            routingKey,
+            Buffer.from(message),
+            {
+               persistent: true,
+               timestamp: Date.now(),
+            }
+         );
+
+         if (!published) {
+            throw new Error('Failed to publish message to RabbitMQ');
+         }
+
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.info(
+               { planId: data.planId, routingKey },
+               'Published subscription.gating.changed event',
+            );
+         }
+      } catch (error) {
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.error(
+               { err: error, planId: data.planId },
+               'Error publishing subscription.gating.changed event',
+            );
+         }
+         throw error;
+      }
+   }
+
+   /**
     * Publish user deleted event (stub for future user delete API)
     */
    async publishUserDeleted(data: { userId: string; authorId?: string }): Promise<void> {

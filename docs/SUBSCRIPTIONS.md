@@ -74,4 +74,28 @@ Billing events are ledger-only (no payment gateway in auth-service); clients or 
 
 ## app-service gating
 
-`GET /api/v1/audiobooks/:id` returns `subscriptionAccess` via `GET /auth/subscriptions/me/tier` using the same JWT. Set `AUTH_SERVICE_URL` in app-service.
+Content tier gating is configured in **app-service** on audiobooks and chapters using `SubscriptionPlan.tierLevel` from this service:
+
+| `subscriptionGatingMode` | Where tier is set | Access behavior |
+|--------------------------|-------------------|-----------------|
+| `NONE` | nowhere | No subscription required |
+| `AUDIOBOOK` | `audiobook.minSubscriptionTier` | Whole book gated; chapters inherit the audiobook tier |
+| `CHAPTER` | uniform `chapter.minSubscriptionTier` on every chapter | Audiobook detail is open; each chapter returns its own `subscriptionAccess` |
+
+Rules enforced by app-service:
+
+- Audiobook-level gating: chapters cannot have their own `minSubscriptionTier`.
+- Chapter-level gating: all chapters in an audiobook must share the same tier (no mixing tier 1 and tier 2).
+- User tier is resolved via `GET /auth/subscriptions/me/tier` with the same JWT.
+
+`GET /api/v1/audiobooks/:id` returns audiobook `subscriptionAccess`. Chapter list/detail includes per-chapter `subscriptionAccess`. Set `AUTH_SERVICE_URL` in app-service.
+
+### SSE cache invalidation
+
+| Event | Resource | When |
+|-------|----------|------|
+| User subscription tier changes | `subscription-catalog` | create/upgrade/cancel/renew with tier change (user-scoped via `relatedIds.userId`) |
+| Subscription plan tier definition changes | `subscription-gating` | plan create/update/delete in auth; relayed to app via RabbitMQ |
+| Audiobook/chapter gating config changes | `subscription-gating` | app-service when `subscriptionGatingMode` or `minSubscriptionTier` changes (includes chapter query keys via `relatedIds.audiobookId`) |
+
+Clients should `removeQueries` then `invalidateQueries` for each `queryKey`. Prefix key `['audiobooks']` covers chapter queries (`['audiobooks', id, 'chapters']`).

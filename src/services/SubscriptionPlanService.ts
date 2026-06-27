@@ -9,6 +9,7 @@ import {
 import { SubscriptionError } from '../types/subscription';
 import { subscriptionMessages } from '../utils/subscriptionMessages';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { emitSubscriptionGatingInvalidation } from './subscriptionGatingInvalidation';
 
 const msg = subscriptionMessages.error.subscription_plans;
 
@@ -41,6 +42,7 @@ export class SubscriptionPlanService {
             },
          });
          emitCacheInvalidation('subscription-plan', 'created', created.id);
+         emitSubscriptionGatingInvalidation({ action: 'created', planId: created.id });
          return toSubscriptionPlanDto(created);
       } catch (error) {
          if (error instanceof SubscriptionError) throw error;
@@ -120,6 +122,7 @@ export class SubscriptionPlanService {
          if (data.isActive !== undefined) updateData.isActive = data.isActive;
          const updated = await this.prisma.subscriptionPlan.update({ where: { id }, data: updateData });
          emitCacheInvalidation('subscription-plan', 'updated', id);
+         emitSubscriptionGatingInvalidation({ action: 'updated', planId: id });
          return toSubscriptionPlanDto(updated);
       } catch (error) {
          if (error instanceof SubscriptionError) throw error;
@@ -135,10 +138,12 @@ export class SubscriptionPlanService {
          if (subscriptionsCount > 0) {
             await this.prisma.subscriptionPlan.update({ where: { id }, data: { isActive: false } });
             emitCacheInvalidation('subscription-plan', 'updated', id);
+            emitSubscriptionGatingInvalidation({ action: 'updated', planId: id });
             return { deleted: false, deactivated: true };
          }
          await this.prisma.subscriptionPlan.delete({ where: { id } });
          emitCacheInvalidation('subscription-plan', 'deleted', id);
+         emitSubscriptionGatingInvalidation({ action: 'deleted', planId: id });
          return { deleted: true, deactivated: false };
       } catch (error) {
          if (error instanceof SubscriptionError) throw error;
