@@ -319,6 +319,14 @@ enum OrganizationTeamSize {
    SIZE_200_PLUS @map("200+")
 }
 
+enum AuthorOrganizationInvitationStatus {
+   PENDING_CONTACT_CONSENT
+   AWAITING_ORG_CONTACT
+   AWAITING_JOIN_DECISION
+   DECLINED
+   ACCEPTED
+}
+
 model Organization {
    id             String                @id @default(cuid())
    name           String
@@ -334,6 +342,7 @@ model Organization {
 
    members OrganizationMember[]
    authors AuthorOrganization[]
+   authorInvitations AuthorOrganizationInvitation[]
 
    @@map("organizations")
 }
@@ -348,6 +357,7 @@ model Author {
 
    user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
    organizations AuthorOrganization[]
+   organizationInvitations AuthorOrganizationInvitation[]
 
    @@map("authors")
 }
@@ -364,6 +374,26 @@ model AuthorOrganization {
 
    @@unique([authorId, organizationId])
    @@map("author_organizations")
+}
+
+model AuthorOrganizationInvitation {
+   id                    String                             @id @default(cuid())
+   organizationId        String
+   authorId              String
+   status                AuthorOrganizationInvitationStatus
+   contactRevealedAt     DateTime?
+   orgContactConfirmedAt DateTime?
+   respondedAt           DateTime?
+   createdAt             DateTime                           @default(now())
+   updatedAt             DateTime                           @updatedAt
+
+   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+   author       Author       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+   @@unique([organizationId, authorId])
+   @@index([authorId, status])
+   @@index([organizationId, status])
+   @@map("author_organization_invitations")
 }
 
 model OrganizationMember {

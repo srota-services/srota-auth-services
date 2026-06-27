@@ -108,6 +108,108 @@ const options: swaggerJsdoc.Options = {
                   updatedAt: { type: 'string', format: 'date-time' },
                },
             },
+            InvitationOrganizationSummary: {
+               type: 'object',
+               required: ['id', 'name'],
+               properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string', example: 'Acme Publishing' },
+               },
+            },
+            InvitationAuthorSummary: {
+               type: 'object',
+               required: ['id'],
+               properties: {
+                  id: { type: 'string' },
+                  firstName: { type: 'string', nullable: true, example: 'Jane' },
+                  lastName: { type: 'string', nullable: true, example: 'Doe' },
+                  email: { type: 'string', example: 'jane@example.com', description: 'Visible after author reveals contact' },
+                  contact: { type: 'string', nullable: true, example: '+15551234567', description: 'Visible after author reveals contact' },
+               },
+            },
+            AuthorOrganizationInvitationForAuthor: {
+               type: 'object',
+               properties: {
+                  id: { type: 'string' },
+                  status: {
+                     type: 'string',
+                     enum: [
+                        'PENDING_CONTACT_CONSENT',
+                        'AWAITING_ORG_CONTACT',
+                        'AWAITING_JOIN_DECISION',
+                        'DECLINED',
+                        'ACCEPTED',
+                     ],
+                  },
+                  organization: { $ref: '#/components/schemas/InvitationOrganizationSummary' },
+                  contactRevealedAt: { type: 'string', format: 'date-time', nullable: true },
+                  orgContactConfirmedAt: { type: 'string', format: 'date-time', nullable: true },
+                  respondedAt: { type: 'string', format: 'date-time', nullable: true },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' },
+               },
+            },
+            AuthorOrganizationInvitationForOrg: {
+               type: 'object',
+               properties: {
+                  id: { type: 'string' },
+                  status: {
+                     type: 'string',
+                     enum: [
+                        'PENDING_CONTACT_CONSENT',
+                        'AWAITING_ORG_CONTACT',
+                        'AWAITING_JOIN_DECISION',
+                        'DECLINED',
+                        'ACCEPTED',
+                     ],
+                  },
+                  author: { $ref: '#/components/schemas/InvitationAuthorSummary' },
+                  contactRevealedAt: { type: 'string', format: 'date-time', nullable: true },
+                  orgContactConfirmedAt: { type: 'string', format: 'date-time', nullable: true },
+                  respondedAt: { type: 'string', format: 'date-time', nullable: true },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' },
+               },
+            },
+            OrganizationAuthorMember: {
+               type: 'object',
+               required: ['id', 'email'],
+               properties: {
+                  id: { type: 'string' },
+                  firstName: { type: 'string', nullable: true, example: 'Jane' },
+                  lastName: { type: 'string', nullable: true, example: 'Doe' },
+                  email: { type: 'string', example: 'jane@example.com' },
+                  contact: { type: 'string', nullable: true, example: '+15551234567' },
+               },
+            },
+            CreateAuthorOrganizationInvitationRequest: {
+               type: 'object',
+               required: ['authorId'],
+               properties: {
+                  authorId: { type: 'string' },
+               },
+            },
+            RevealContactRequest: {
+               type: 'object',
+               required: ['reveal'],
+               properties: {
+                  reveal: { type: 'boolean' },
+               },
+            },
+            ConfirmOrgContactRequest: {
+               type: 'object',
+               required: ['contacted'],
+               properties: {
+                  contacted: { type: 'boolean' },
+               },
+            },
+            JoinOrganizationInvitationRequest: {
+               type: 'object',
+               required: ['accept'],
+               properties: {
+                  accept: { type: 'boolean' },
+               },
+            },
             OrganizationMember: {
                type: 'object',
                properties: {
@@ -410,6 +512,7 @@ const options: swaggerJsdoc.Options = {
          { name: 'Auth', description: 'Registration, login, tokens, and profile' },
          { name: 'Organizations', description: 'Organization CRUD and membership' },
          { name: 'Authors', description: 'Author profiles and org links' },
+         { name: 'AuthorInvitations', description: 'Step-by-step author organization invitations' },
          { name: 'Catalog', description: 'Public catalog reads for cross-service hydration' },
          { name: 'SubscriptionPlans', description: 'Subscription plan management' },
          { name: 'Subscriptions', description: 'User subscription lifecycle' },

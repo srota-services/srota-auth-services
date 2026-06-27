@@ -20,6 +20,16 @@ export const domainMessages = {
          updated: 'Author updated successfully',
          deleted: 'Author deleted successfully',
       },
+      authorInvitations: {
+         created: 'Author invitation sent successfully',
+         retrieved: 'Author invitations retrieved successfully',
+         authors_retrieved: 'Organization authors retrieved successfully',
+         contact_revealed: 'Contact information shared with organization',
+         contact_confirmed: 'Organization contact confirmed',
+         awaiting_org_contact: 'Organization must contact you before proceeding',
+         declined: 'Invitation declined',
+         joined: 'You have joined the organization',
+      },
    },
    error: {
       organizations: {
@@ -56,6 +66,14 @@ export const domainMessages = {
          delete_failed: 'Failed to delete author',
          user_id_exists: 'An author profile already exists for this user',
          organization_not_found: 'One or more organizations were not found',
+         direct_org_link_not_allowed: 'New organization links must be created through the invitation flow',
+      },
+      authorInvitations: {
+         not_found: 'Author invitation not found',
+         invitation_already_pending: 'An active invitation already exists for this author',
+         author_already_linked: 'Author is already linked to this organization',
+         invalid_status: 'This invitation step is not available in the current state',
+         access_denied: 'You do not have access to this invitation',
       },
       validation: {
          no_update_fields: 'At least one field must be provided for update',

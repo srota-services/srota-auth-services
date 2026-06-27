@@ -146,6 +146,13 @@ jest.mock('@prisma/client', () => {
          SIZE_51_200: 'SIZE_51_200',
          SIZE_200_PLUS: 'SIZE_200_PLUS',
       },
+      AuthorOrganizationInvitationStatus: {
+         PENDING_CONTACT_CONSENT: 'PENDING_CONTACT_CONSENT',
+         AWAITING_ORG_CONTACT: 'AWAITING_ORG_CONTACT',
+         AWAITING_JOIN_DECISION: 'AWAITING_JOIN_DECISION',
+         DECLINED: 'DECLINED',
+         ACCEPTED: 'ACCEPTED',
+      },
    };
 });
 

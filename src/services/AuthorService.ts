@@ -21,6 +21,7 @@ export class AuthorService {
    private async syncAuthorOrganizations(
       authorId: string,
       organizationIds?: string[],
+      allowNewLinks = false,
    ): Promise<void> {
       if (organizationIds === undefined) {
          return;
@@ -36,6 +37,18 @@ export class AuthorService {
 
          if (organizations.length !== uniqueIds.length) {
             throw DomainError.notFound(msg.organization_not_found);
+         }
+      }
+
+      if (!allowNewLinks) {
+         const currentLinks = await this.prisma.authorOrganization.findMany({
+            where: { authorId },
+            select: { organizationId: true },
+         });
+         const currentIds = new Set(currentLinks.map((link) => link.organizationId));
+         const hasNewLinks = uniqueIds.some((organizationId) => !currentIds.has(organizationId));
+         if (hasNewLinks) {
+            throw DomainError.conflict(msg.direct_org_link_not_allowed);
          }
       }
 
@@ -121,7 +134,7 @@ export class AuthorService {
       return toAuthorDto(author);
    }
 
-   async createAuthor(createAuthorDto: CreateAuthorDto): Promise<AuthorDto> {
+   async createAuthor(createAuthorDto: CreateAuthorDto, allowDirectOrgLink = false): Promise<AuthorDto> {
       try {
          if (!createAuthorDto.userId || createAuthorDto.userId.trim().length === 0) {
             throw DomainError.validation(validationMsg.author_user_id_required);
@@ -172,7 +185,7 @@ export class AuthorService {
             });
          });
 
-         await this.syncAuthorOrganizations(author.id, createAuthorDto.organizationIds);
+         await this.syncAuthorOrganizations(author.id, createAuthorDto.organizationIds, allowDirectOrgLink);
 
          const created = await this.getAuthorRecord(author.id);
          emitCacheInvalidation('author', 'created', author.id);
@@ -188,7 +201,11 @@ export class AuthorService {
       }
    }
 
-   async updateAuthor(id: string, updateAuthorDto: UpdateAuthorDto): Promise<AuthorDto> {
+   async updateAuthor(
+      id: string,
+      updateAuthorDto: UpdateAuthorDto,
+      allowDirectOrgLink = false,
+   ): Promise<AuthorDto> {
       try {
          const existingAuthor = await this.prisma.author.findUnique({
             where: { id },
@@ -241,7 +258,7 @@ export class AuthorService {
             });
          }
 
-         await this.syncAuthorOrganizations(id, updateAuthorDto.organizationIds);
+         await this.syncAuthorOrganizations(id, updateAuthorDto.organizationIds, allowDirectOrgLink);
 
          const updated = await this.getAuthorRecord(id);
          emitCacheInvalidation('author', 'updated', id);
