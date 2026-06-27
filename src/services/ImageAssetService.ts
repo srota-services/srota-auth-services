@@ -9,6 +9,7 @@ import { StorageFactory } from './storage/StorageFactory';
 import { fileUrlService } from './FileUrlService';
 import { mediaCleanupService } from './MediaCleanupService';
 import { AUTH_PRIMARY_VARIANT_KEY } from '../constants/imagePlaceholderSpecs';
+import { runWrite } from '../utils/prismaTransaction';
 
 export interface GenerateVariantsResult {
    primaryStorageKey: string;
@@ -41,7 +42,9 @@ export class ImageAssetService {
          await mediaCleanupService.deleteStoredFile(asset.storageKey);
       }
 
-      await this.prisma.imageAsset.deleteMany({ where: { category, entityId } });
+      await runWrite(this.prisma, (tx) =>
+         tx.imageAsset.deleteMany({ where: { category, entityId } }),
+      );
    }
 
    async generateAndStoreVariants(
@@ -88,28 +91,30 @@ export class ImageAssetService {
                variants[spec.variantKey] = storageKey;
             }
 
-            await this.prisma.imageAsset.upsert({
-               where: {
-                  category_entityId_variantKey: {
+            await runWrite(this.prisma, (tx) =>
+               tx.imageAsset.upsert({
+                  where: {
+                     category_entityId_variantKey: {
+                        category,
+                        entityId,
+                        variantKey: spec.variantKey,
+                     },
+                  },
+                  update: {
+                     storageKey: variants[spec.variantKey]!,
+                     width: spec.actualWidth,
+                     height: spec.actualHeight,
+                  },
+                  create: {
                      category,
                      entityId,
                      variantKey: spec.variantKey,
+                     storageKey: variants[spec.variantKey]!,
+                     width: spec.actualWidth,
+                     height: spec.actualHeight,
                   },
-               },
-               update: {
-                  storageKey: variants[spec.variantKey]!,
-                  width: spec.actualWidth,
-                  height: spec.actualHeight,
-               },
-               create: {
-                  category,
-                  entityId,
-                  variantKey: spec.variantKey,
-                  storageKey: variants[spec.variantKey]!,
-                  width: spec.actualWidth,
-                  height: spec.actualHeight,
-               },
-            });
+               }),
+            );
          }
       } finally {
          for (const file of tempFiles) {

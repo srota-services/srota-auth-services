@@ -116,6 +116,17 @@ describe('UserSubscriptionService', () => {
             service.createSubscription({ userId: 'missing', planId: 'plan1' })
          ).rejects.toBeInstanceOf(SubscriptionError);
       });
+
+      it('rejects conflict when user already has active subscription', async () => {
+         mockPrisma.user.findUnique.mockResolvedValue({ id: 'user-uuid', role: 'LISTENER' });
+         mockPrisma.subscriptionPlan.findUnique.mockResolvedValue(basePlan);
+         mockPrisma.userSubscription.findFirst.mockResolvedValue({ id: 'existing-sub' });
+
+         await expect(
+            service.createSubscription({ userId: 'user-uuid', planId: basePlan.id })
+         ).rejects.toMatchObject({ statusCode: 409 });
+         expect(mockPrisma.userSubscription.create).not.toHaveBeenCalled();
+      });
    });
 
    describe('changeSubscriptionPlan', () => {

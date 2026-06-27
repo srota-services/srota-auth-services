@@ -29,7 +29,7 @@ function createFileDestination(logDir: string, filename: string) {
    return pino.destination({ fd, minLength: 0, sync: false });
 }
 
-function createServiceLogger(service: ServiceName): Logger {
+function createServiceLogger(service: ServiceName, errorLogFile?: pino.DestinationStream): Logger {
    if (config.NODE_ENV === 'test') {
       return pino({ level: 'silent' });
    }
@@ -45,26 +45,42 @@ function createServiceLogger(service: ServiceName): Logger {
    const usePrettyConsole =
       config.NODE_ENV === 'development' || config.NODE_ENV === 'testing';
 
+   const streams: pino.StreamEntry[] = [{ stream: fileStream }];
+   if (errorLogFile) {
+      streams.push({ level: 'error' as pino.Level, stream: errorLogFile });
+   }
+
    if (usePrettyConsole) {
       const prettyStream = pretty({
          colorize: true,
          translateTime: 'SYS:standard',
          ignore: 'pid,hostname,service',
       });
-
-      return pino(
-         loggerOptions,
-         multistream([
-            { stream: fileStream },
-            { stream: prettyStream },
-         ])
-      );
+      streams.push({ stream: prettyStream });
    }
 
-   return pino(loggerOptions, fileStream);
+   return pino(loggerOptions, multistream(streams));
 }
 
-export const appLogger = createServiceLogger('app');
+function createLoggers(): { appLogger: Logger; errorLogger: Logger } {
+   if (config.NODE_ENV === 'test') {
+      const silent = pino({ level: 'silent' });
+      return { appLogger: silent, errorLogger: silent };
+   }
+
+   const logDir = ensureLogDir();
+   const errorLogFile = createFileDestination(logDir, 'error.log');
+   const errorLogger = pino({ level: 'error' }, errorLogFile);
+
+   return {
+      appLogger: createServiceLogger('app', errorLogFile),
+      errorLogger,
+   };
+}
+
+const { appLogger, errorLogger } = createLoggers();
+
+export { appLogger, errorLogger };
 export const rabbitmqLogger = createServiceLogger('rabbitmq');
 export const redisLogger = createServiceLogger('redis');
 export const emailLogger = createServiceLogger('email');

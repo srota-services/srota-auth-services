@@ -9,6 +9,8 @@ import {
 import { DomainError } from '../types/domain';
 import { domainMessages } from '../utils/domainMessages';
 import { generateAuthorSlug } from '../utils/slug';
+import { runInTransaction, runWrite, type TransactionClient } from '../utils/prismaTransaction';
+import { rethrowServiceError } from '../utils/serviceError';
 import { rabbitmqService } from './rabbitmq';
 import { emitCacheInvalidation } from './DomainEventPublisher';
 
@@ -22,15 +24,17 @@ export class AuthorService {
       authorId: string,
       organizationIds?: string[],
       allowNewLinks = false,
+      tx?: TransactionClient,
    ): Promise<void> {
       if (organizationIds === undefined) {
          return;
       }
 
+      const client = tx ?? this.prisma;
       const uniqueIds = [...new Set(organizationIds.map((id) => id.trim()).filter(Boolean))];
 
       if (uniqueIds.length > 0) {
-         const organizations = await this.prisma.organization.findMany({
+         const organizations = await client.organization.findMany({
             where: { id: { in: uniqueIds } },
             select: { id: true },
          });
@@ -41,7 +45,7 @@ export class AuthorService {
       }
 
       if (!allowNewLinks) {
-         const currentLinks = await this.prisma.authorOrganization.findMany({
+         const currentLinks = await client.authorOrganization.findMany({
             where: { authorId },
             select: { organizationId: true },
          });
@@ -52,10 +56,10 @@ export class AuthorService {
          }
       }
 
-      await this.prisma.authorOrganization.deleteMany({ where: { authorId } });
+      await client.authorOrganization.deleteMany({ where: { authorId } });
 
       if (uniqueIds.length > 0) {
-         await this.prisma.authorOrganization.createMany({
+         await client.authorOrganization.createMany({
             data: uniqueIds.map((organizationId) => ({
                authorId,
                organizationId,
@@ -82,8 +86,8 @@ export class AuthorService {
             orderBy: { createdAt: 'desc' },
          });
          return authors.map((author) => toAuthorDto(author));
-      } catch {
-         throw DomainError.internal(msg.fetch_failed);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getAllAuthors' }, msg.fetch_failed);
       }
    }
 
@@ -92,10 +96,7 @@ export class AuthorService {
          const author = await this.getAuthorRecord(id);
          return toAuthorDto(author);
       } catch (error) {
-         if (error instanceof DomainError) {
-            throw error;
-         }
-         throw DomainError.internal(msg.fetch_failed);
+         rethrowServiceError(error, { operation: 'getAuthorById' }, msg.fetch_failed);
       }
    }
 
@@ -119,18 +120,29 @@ export class AuthorService {
       userId: string,
       firstName: string,
       lastName: string,
+      tx?: TransactionClient,
    ): Promise<AuthorDto> {
-      const existingAuthor = await this.prisma.author.findUnique({ where: { userId } });
+      const client = tx ?? this.prisma;
+      const existingAuthor = await client.author.findUnique({ where: { userId } });
       if (existingAuthor) {
-         return toAuthorDto(await this.getAuthorRecord(existingAuthor.id));
+         const record = await client.author.findUnique({
+            where: { id: existingAuthor.id },
+            include: authorInclude,
+         });
+         if (!record) {
+            throw DomainError.notFound(msg.not_found);
+         }
+         return toAuthorDto(record);
       }
 
-      const slug = await generateAuthorSlug(this.prisma, firstName, lastName);
-      const author = await this.prisma.author.create({
+      const slug = await generateAuthorSlug(client as PrismaClient, firstName, lastName);
+      const author = await client.author.create({
          data: { userId, slug },
          include: authorInclude,
       });
-      emitCacheInvalidation('author', 'created', author.id);
+      if (!tx) {
+         emitCacheInvalidation('author', 'created', author.id);
+      }
       return toAuthorDto(author);
    }
 
@@ -163,7 +175,7 @@ export class AuthorService {
             throw DomainError.validation(validationMsg.author_last_name_required);
          }
 
-         const author = await this.prisma.$transaction(async (tx) => {
+         const author = await runInTransaction(this.prisma, async (tx) => {
             await tx.user.update({
                where: { id: trimmedUserId },
                data: {
@@ -179,25 +191,26 @@ export class AuthorService {
             });
 
             const slug = await generateAuthorSlug(tx as PrismaClient, firstName, lastName);
-            return tx.author.create({
+            const created = await tx.author.create({
                data: { userId: trimmedUserId, slug },
                include: authorInclude,
             });
-         });
 
-         await this.syncAuthorOrganizations(author.id, createAuthorDto.organizationIds, allowDirectOrgLink);
+            await this.syncAuthorOrganizations(
+               created.id,
+               createAuthorDto.organizationIds,
+               allowDirectOrgLink,
+               tx,
+            );
+
+            return created;
+         });
 
          const created = await this.getAuthorRecord(author.id);
          emitCacheInvalidation('author', 'created', author.id);
          return toAuthorDto(created);
       } catch (error) {
-         if (error instanceof DomainError) {
-            throw error;
-         }
-         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-            throw DomainError.conflict(msg.user_id_exists);
-         }
-         throw DomainError.internal(msg.create_failed);
+         rethrowServiceError(error, { operation: 'createAuthor' }, msg.create_failed);
       }
    }
 
@@ -251,23 +264,29 @@ export class AuthorService {
             throw DomainError.validation(validationMsg.no_update_fields);
          }
 
-         if (hasUserUpdates) {
-            await this.prisma.user.update({
-               where: { id: existingAuthor.userId },
-               data: userUpdates,
-            });
-         }
+         await runInTransaction(this.prisma, async (tx) => {
+            if (hasUserUpdates) {
+               await tx.user.update({
+                  where: { id: existingAuthor.userId },
+                  data: userUpdates,
+               });
+            }
 
-         await this.syncAuthorOrganizations(id, updateAuthorDto.organizationIds, allowDirectOrgLink);
+            if (hasOrgUpdates) {
+               await this.syncAuthorOrganizations(
+                  id,
+                  updateAuthorDto.organizationIds,
+                  allowDirectOrgLink,
+                  tx,
+               );
+            }
+         });
 
          const updated = await this.getAuthorRecord(id);
          emitCacheInvalidation('author', 'updated', id);
          return toAuthorDto(updated);
       } catch (error) {
-         if (error instanceof DomainError) {
-            throw error;
-         }
-         throw DomainError.internal(msg.update_failed);
+         rethrowServiceError(error, { operation: 'updateAuthor' }, msg.update_failed);
       }
    }
 
@@ -279,7 +298,7 @@ export class AuthorService {
          }
 
          const { userId } = existingAuthor;
-         await this.prisma.author.delete({ where: { id } });
+         await runWrite(this.prisma, (tx) => tx.author.delete({ where: { id } }));
 
          try {
             await rabbitmqService.publishAuthorDeleted({ authorId: id, userId });
@@ -288,10 +307,7 @@ export class AuthorService {
          }
          emitCacheInvalidation('author', 'deleted', id, { userId });
       } catch (error) {
-         if (error instanceof DomainError) {
-            throw error;
-         }
-         throw DomainError.internal(msg.delete_failed);
+         rethrowServiceError(error, { operation: 'deleteAuthor' }, msg.delete_failed);
       }
    }
 }

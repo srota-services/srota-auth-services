@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { appLogger } from '../utils/logger';
+import { appLogger, errorLogger } from '../utils/logger';
 import rateLimit from 'express-rate-limit';
 import { JWTUtils } from '../utils/crypto';
 import { redisService } from '../services/redis';
@@ -158,11 +158,29 @@ export const generalRateLimit = rateLimit({
  */
 export const errorHandler = (
    error: Error,
-   _req: Request,
+   req: Request,
    res: Response,
    _next: NextFunction
 ): void => {
-   appLogger.error({ err: error }, 'Request error');
+   const statusCode =
+      error instanceof ValidationError ? error.statusCode :
+      error instanceof AuthError ? error.statusCode :
+      error instanceof SubscriptionError ? error.statusCode :
+      error instanceof DomainError ? error.statusCode :
+      500;
+
+   const errorContext = {
+      err: error,
+      method: req.method,
+      url: req.originalUrl,
+      statusCode,
+   };
+
+   if (statusCode >= 500) {
+      errorLogger.error(errorContext, 'Request error');
+   } else {
+      appLogger.warn(errorContext, 'Client error');
+   }
 
    // Handle specific error types
    if (error instanceof ValidationError) {

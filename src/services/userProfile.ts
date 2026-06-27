@@ -1,4 +1,5 @@
 import { Gender, PrismaClient } from '@prisma/client';
+import { runWrite } from '../utils/prismaTransaction';
 import { UpdateUserProfileRequest, UserResponse } from '../types';
 import { LocationResolverService } from './LocationResolverService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
@@ -55,10 +56,12 @@ export class UserProfileService {
          }
       }
 
-      const user = await prisma.user.update({
-         where: { id: userId },
-         data: updateData,
-      });
+      const user = await runWrite(prisma, (tx) =>
+         tx.user.update({
+            where: { id: userId },
+            data: updateData,
+         }),
+      );
 
       emitCacheInvalidation('user-profile', 'updated', userId, { userId });
 

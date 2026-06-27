@@ -6,6 +6,8 @@ import { googleOAuthService } from './google-oauth';
 import { otpService } from './otp';
 import { userDeviceService } from './userDevice';
 import { appLogger } from '../utils/logger';
+import { runWrite, runInTransaction, type TransactionClient } from '../utils/prismaTransaction';
+import { logServiceError } from '../utils/serviceError';
 import { ClientType } from '../constants/clientType';
 import { OAuthClientApp } from '../constants/oauthClientApp';
 import { isPartnerAppRole, isOrgAdminRole, isOrgCoordinatorRole, isGlobalAuthorRole } from '../constants/authRoles';
@@ -79,14 +81,16 @@ export class AuthService {
       const hashedPassword = await PasswordUtils.hashPassword(password);
 
       // Create user
-      const user = await prisma.user.create({
-         data: {
-            email: email.toLowerCase(),
-            password: hashedPassword,
-            role: userRole,
-            emailVerified: false,
-         },
-      });
+      const user = await runWrite(prisma, (tx) =>
+         tx.user.create({
+            data: {
+               email: email.toLowerCase(),
+               password: hashedPassword,
+               role: userRole,
+               emailVerified: false,
+            },
+         }),
+      );
 
       if (isAuthor) {
          await redisService.setPendingAuthorRegistration(user.id, {
@@ -113,7 +117,7 @@ export class AuthService {
          } else {
             await redisService.deletePendingUserRegistration(user.id);
          }
-         appLogger.error({ err: error }, 'Failed to create OTP');
+         logServiceError(error, { operation: 'register.createOTP' });
          throw new Error('Failed to send OTP. Please try again.');
       }
 
@@ -190,23 +194,30 @@ export class AuthService {
             throw new Error('Author registration data expired, please register again');
          }
 
-         const updatedUser = await prisma.user.update({
-            where: { id: user.id },
-            data: {
-               emailVerified: true,
-               firstName: pendingAuthor.firstName,
-               lastName: pendingAuthor.lastName,
-               address: pendingAuthor.address,
-               ...(pendingAuthor.contact !== undefined ? { contact: pendingAuthor.contact } : {}),
-            },
+         const authorService = new AuthorService(prisma);
+         const { updatedUser, author } = await runInTransaction(prisma, async (tx) => {
+            const updated = await tx.user.update({
+               where: { id: user.id },
+               data: {
+                  emailVerified: true,
+                  firstName: pendingAuthor.firstName,
+                  lastName: pendingAuthor.lastName,
+                  address: pendingAuthor.address,
+                  ...(pendingAuthor.contact !== undefined ? { contact: pendingAuthor.contact } : {}),
+               },
+            });
+
+            const authorDto = await authorService.createAuthorForUser(
+               updated.id,
+               pendingAuthor.firstName,
+               pendingAuthor.lastName,
+               tx,
+            );
+
+            return { updatedUser: updated, author: authorDto };
          });
 
-         const authorService = new AuthorService(prisma);
-         const author = await authorService.createAuthorForUser(
-            updatedUser.id,
-            pendingAuthor.firstName,
-            pendingAuthor.lastName,
-         );
+         emitCacheInvalidation('author', 'created', author.id);
 
          const authResponse = await this.issueAuthTokens(updatedUser, data.device, data.meta);
 
@@ -232,16 +243,18 @@ export class AuthService {
          throw new Error('User registration data expired, please register again');
       }
 
-      const updatedUser = await prisma.user.update({
-         where: { id: user.id },
-         data: {
-            emailVerified: true,
-            address: pendingUser.address,
-            contact: pendingUser.contact,
-            ...(firstName !== undefined && firstName.trim().length > 0 ? { firstName: firstName.trim() } : {}),
-            ...(lastName !== undefined && lastName.trim().length > 0 ? { lastName: lastName.trim() } : {}),
-         },
-      });
+      const updatedUser = await runWrite(prisma, (tx) =>
+         tx.user.update({
+            where: { id: user.id },
+            data: {
+               emailVerified: true,
+               address: pendingUser.address,
+               contact: pendingUser.contact,
+               ...(firstName !== undefined && firstName.trim().length > 0 ? { firstName: firstName.trim() } : {}),
+               ...(lastName !== undefined && lastName.trim().length > 0 ? { lastName: lastName.trim() } : {}),
+            },
+         }),
+      );
 
       const authResponse = await this.issueAuthTokens(updatedUser, data.device, data.meta);
 
@@ -326,20 +339,20 @@ export class AuthService {
       const newRefreshToken = TokenUtils.generateRefreshToken();
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-      // Mark old token as replaced
-      await prisma.refreshToken.update({
-         where: { id: tokenRecord.id },
-         data: { replacedBy: newRefreshToken },
-      });
+      await runInTransaction(prisma, async (tx) => {
+         await tx.refreshToken.update({
+            where: { id: tokenRecord.id },
+            data: { replacedBy: newRefreshToken },
+         });
 
-      // Create new refresh token (preserve device binding)
-      await prisma.refreshToken.create({
-         data: {
-            token: newRefreshToken,
-            userId: tokenRecord.userId,
-            userDeviceId: tokenRecord.userDeviceId,
-            expiresAt,
-         },
+         await tx.refreshToken.create({
+            data: {
+               token: newRefreshToken,
+               userId: tokenRecord.userId,
+               userDeviceId: tokenRecord.userDeviceId,
+               expiresAt,
+            },
+         });
       });
 
       return {
@@ -358,10 +371,12 @@ export class AuthService {
     * Logout user (revoke refresh token)
     */
    async logout(refreshToken: string): Promise<void> {
-      await prisma.refreshToken.updateMany({
-         where: { token: refreshToken },
-         data: { isRevoked: true },
-      });
+      await runWrite(prisma, (tx) =>
+         tx.refreshToken.updateMany({
+            where: { token: refreshToken },
+            data: { isRevoked: true },
+         }),
+      );
    }
 
    /**
@@ -379,16 +394,16 @@ export class AuthService {
          throw new Error('Invalid or expired verification token');
       }
 
-      // Mark email as verified
-      await prisma.user.update({
-         where: { id: verificationRecord.userId },
-         data: { emailVerified: true },
-      });
+      await runInTransaction(prisma, async (tx) => {
+         await tx.user.update({
+            where: { id: verificationRecord.userId },
+            data: { emailVerified: true },
+         });
 
-      // Mark token as used
-      await prisma.emailVerificationToken.update({
-         where: { id: verificationRecord.id },
-         data: { used: true },
+         await tx.emailVerificationToken.update({
+            where: { id: verificationRecord.id },
+            data: { used: true },
+         });
       });
    }
 
@@ -415,8 +430,8 @@ export class AuthService {
       try {
          await otpService.createOTP(user.id, OtpPurpose.PASSWORD_RESET, user.email);
       } catch (error) {
-         appLogger.error({ err: error }, 'Failed to create OTP');
-         throw new Error(error instanceof Error ? error.message : 'Failed to send OTP. Please try again.');
+         logServiceError(error, { operation: 'forgotPassword.createOTP' });
+         throw new Error('Failed to send OTP. Please try again.');
       }
    }
 
@@ -455,14 +470,17 @@ export class AuthService {
       // Hash new password
       const hashedPassword = await PasswordUtils.hashPassword(newPassword);
 
-      // Update password
-      await prisma.user.update({
-         where: { id: user.id },
-         data: { password: hashedPassword },
-      });
+      await runInTransaction(prisma, async (tx) => {
+         await tx.user.update({
+            where: { id: user.id },
+            data: { password: hashedPassword },
+         });
 
-      // Revoke all refresh tokens for security
-      await this.revokeAllUserTokens(user.id);
+         await tx.refreshToken.updateMany({
+            where: { userId: user.id },
+            data: { isRevoked: true },
+         });
+      });
    }
 
    /**
@@ -486,8 +504,8 @@ export class AuthService {
       try {
          await otpService.createOTP(userId, OtpPurpose.PASSWORD_UPDATE, user.email);
       } catch (error) {
-         appLogger.error({ err: error }, 'Failed to create OTP');
-         throw new Error(error instanceof Error ? error.message : 'Failed to send OTP. Please try again.');
+         logServiceError(error, { operation: 'requestPasswordChangeOTP.createOTP' });
+         throw new Error('Failed to send OTP. Please try again.');
       }
    }
 
@@ -529,14 +547,17 @@ export class AuthService {
       // Hash new password
       const hashedPassword = await PasswordUtils.hashPassword(newPassword);
 
-      // Update password
-      await prisma.user.update({
-         where: { id: userId },
-         data: { password: hashedPassword },
-      });
+      await runInTransaction(prisma, async (tx) => {
+         await tx.user.update({
+            where: { id: userId },
+            data: { password: hashedPassword },
+         });
 
-      // Revoke all refresh tokens for security
-      await this.revokeAllUserTokens(userId);
+         await tx.refreshToken.updateMany({
+            where: { userId },
+            data: { isRevoked: true },
+         });
+      });
    }
 
    /**
@@ -556,8 +577,8 @@ export class AuthService {
       try {
          await otpService.createOTP(userId, OtpPurpose.EMAIL_UPDATE, email.toLowerCase());
       } catch (error) {
-         appLogger.error({ err: error }, 'Failed to create OTP');
-         throw new Error(error instanceof Error ? error.message : 'Failed to send OTP. Please try again.');
+         logServiceError(error, { operation: 'requestEmailUpdateOTP.createOTP' });
+         throw new Error('Failed to send OTP. Please try again.');
       }
    }
 
@@ -599,17 +620,20 @@ export class AuthService {
          throw new Error('Email already in use');
       }
 
-      // Update email
-      await prisma.user.update({
-         where: { id: userId },
-         data: {
-            email: newEmail.toLowerCase(),
-            emailVerified: false, // Require re-verification of new email
-         },
-      });
+      await runInTransaction(prisma, async (tx) => {
+         await tx.user.update({
+            where: { id: userId },
+            data: {
+               email: newEmail.toLowerCase(),
+               emailVerified: false,
+            },
+         });
 
-      // Revoke all refresh tokens for security
-      await this.revokeAllUserTokens(userId);
+         await tx.refreshToken.updateMany({
+            where: { userId },
+            data: { isRevoked: true },
+         });
+      });
    }
 
    /**
@@ -628,31 +652,25 @@ export class AuthService {
       });
 
       if (user) {
-         // User exists - login flow
-         // Update googleId if not set (account linking)
-         if (!user.googleId) {
-            await prisma.user.update({
-               where: { id: user.id },
-               data: { googleId: googleUser.googleId },
-            });
-            user.googleId = googleUser.googleId;
+         const needsGoogleIdLink = !user.googleId;
+         const needsEmailVerify = !user.emailVerified && googleUser.emailVerified;
+
+         if (needsGoogleIdLink || needsEmailVerify) {
+            user = await runWrite(prisma, (tx) =>
+               tx.user.update({
+                  where: { id: user!.id },
+                  data: {
+                     ...(needsGoogleIdLink ? { googleId: googleUser.googleId } : {}),
+                     ...(needsEmailVerify ? { emailVerified: true } : {}),
+                  },
+               }),
+            );
          }
 
-         // Verify googleId matches (security check)
          if (user.googleId !== googleUser.googleId) {
             throw new Error('Google account mismatch. Please use the correct Google account.');
          }
 
-         // Auto-verify email if not already verified (Google already verified it)
-         if (!user.emailVerified && googleUser.emailVerified) {
-            await prisma.user.update({
-               where: { id: user.id },
-               data: { emailVerified: true },
-            });
-            user.emailVerified = true;
-         }
-
-         // Check if user is verified
          if (!user.emailVerified) {
             throw new Error('Email not verified. Please check your email for verification link.');
          }
@@ -669,17 +687,19 @@ export class AuthService {
             lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined;
          }
 
-         user = await prisma.user.create({
-            data: {
-               email: googleUser.email,
-               password: null, // OAuth users don't have passwords
-               googleId: googleUser.googleId,
-               role: Role.LISTENER,
-               emailVerified: googleUser.emailVerified, // Auto-verify since Google verified it
-               ...(firstName !== undefined ? { firstName } : {}),
-               ...(lastName !== undefined ? { lastName } : {}),
-            },
-         });
+         user = await runWrite(prisma, (tx) =>
+            tx.user.create({
+               data: {
+                  email: googleUser.email,
+                  password: null,
+                  googleId: googleUser.googleId,
+                  role: Role.LISTENER,
+                  emailVerified: googleUser.emailVerified,
+                  ...(firstName !== undefined ? { firstName } : {}),
+                  ...(lastName !== undefined ? { lastName } : {}),
+               },
+            }),
+         );
 
          try {
             await rabbitmqService.publishUserCreated({
@@ -712,14 +732,16 @@ export class AuthService {
          orderBy: { lastSeenAt: 'desc' },
       });
 
-      const user = existingDevice?.user ?? await prisma.user.create({
-         data: {
-            email: buildGuestEmail(),
-            password: null,
-            role: Role.GUEST,
-            emailVerified: true,
-         },
-      });
+      const user = existingDevice?.user ?? await runWrite(prisma, (tx) =>
+         tx.user.create({
+            data: {
+               email: buildGuestEmail(),
+               password: null,
+               role: Role.GUEST,
+               emailVerified: true,
+            },
+         }),
+      );
 
       return this.issueAuthTokens(user, device, data.meta);
    }
@@ -806,16 +828,18 @@ export class AuthService {
       const refreshToken = TokenUtils.generateRefreshToken();
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-      await prisma.refreshToken.create({
-         data: {
-            token: refreshToken,
-            userId: user.id,
-            userDeviceId: userDevice?.id ?? null,
-            expiresAt,
-            userAgent: meta?.userAgent ?? null,
-            ipAddress: meta?.ipAddress ?? null,
-         },
-      });
+      await runWrite(prisma, (tx) =>
+         tx.refreshToken.create({
+            data: {
+               token: refreshToken,
+               userId: user.id,
+               userDeviceId: userDevice?.id ?? null,
+               expiresAt,
+               userAgent: meta?.userAgent ?? null,
+               ipAddress: meta?.ipAddress ?? null,
+            },
+         }),
+      );
 
       return {
          accessToken,
@@ -845,11 +869,20 @@ export class AuthService {
    /**
     * Revoke all tokens for a user
     */
-   private async revokeAllUserTokens(userId: string): Promise<void> {
-      await prisma.refreshToken.updateMany({
-         where: { userId },
-         data: { isRevoked: true },
-      });
+   private async revokeAllUserTokens(userId: string, tx?: TransactionClient): Promise<void> {
+      const revoke = async (client: TransactionClient) => {
+         await client.refreshToken.updateMany({
+            where: { userId },
+            data: { isRevoked: true },
+         });
+      };
+
+      if (tx) {
+         await revoke(tx);
+         return;
+      }
+
+      await runWrite(prisma, revoke);
    }
 }
 

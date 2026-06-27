@@ -59,6 +59,7 @@ process.env['NOMINATIM_USER_AGENT'] = 'SrotaAuthTest/1.0';
 
 // Mock Prisma client for tests
 jest.mock('@prisma/client', () => {
+   const actual = jest.requireActual('@prisma/client');
    class MockDecimal {
       constructor(private value: string | number) { }
       toString(): string {
@@ -66,7 +67,12 @@ jest.mock('@prisma/client', () => {
       }
    }
    return {
-      Prisma: { Decimal: MockDecimal, JsonNull: null },
+      ...actual,
+      Prisma: {
+         ...actual.Prisma,
+         Decimal: MockDecimal,
+         JsonNull: null,
+      },
       PrismaClient: jest.fn().mockImplementation(() => ({
          user: {
             findUnique: jest.fn(),
