@@ -59,6 +59,7 @@ process.env['NOMINATIM_USER_AGENT'] = 'SrotaAuthTest/1.0';
 
 // Mock Prisma client for tests
 jest.mock('@prisma/client', () => {
+   const actual = jest.requireActual('@prisma/client');
    class MockDecimal {
       constructor(private value: string | number) { }
       toString(): string {
@@ -66,31 +67,59 @@ jest.mock('@prisma/client', () => {
       }
    }
    return {
-      Prisma: { Decimal: MockDecimal, JsonNull: null },
-      PrismaClient: jest.fn().mockImplementation(() => ({
-         user: {
-            findUnique: jest.fn(),
-            create: jest.fn(),
-            update: jest.fn(),
-            findMany: jest.fn(),
-         },
-         refreshToken: {
-            findUnique: jest.fn(),
-            create: jest.fn(),
-            update: jest.fn(),
-            updateMany: jest.fn(),
-         },
-         emailVerificationToken: {
-            findUnique: jest.fn(),
-            create: jest.fn(),
-            update: jest.fn(),
-         },
-         passwordResetToken: {
-            findUnique: jest.fn(),
-            create: jest.fn(),
-            update: jest.fn(),
-         },
-      })),
+      ...actual,
+      Prisma: {
+         ...actual.Prisma,
+         Decimal: MockDecimal,
+         JsonNull: null,
+      },
+      PrismaClient: jest.fn().mockImplementation(() => {
+         const client = {
+            user: {
+               findUnique: jest.fn(),
+               create: jest.fn(),
+               update: jest.fn(),
+               findMany: jest.fn(),
+            },
+            refreshToken: {
+               findUnique: jest.fn(),
+               create: jest.fn(),
+               update: jest.fn(),
+               updateMany: jest.fn(),
+            },
+            emailVerificationToken: {
+               findUnique: jest.fn(),
+               create: jest.fn(),
+               update: jest.fn(),
+            },
+            passwordResetToken: {
+               findUnique: jest.fn(),
+               create: jest.fn(),
+               update: jest.fn(),
+            },
+            userDevice: {
+               findFirst: jest.fn(),
+               findUnique: jest.fn(),
+               create: jest.fn(),
+               update: jest.fn(),
+            },
+            otpToken: {
+               findFirst: jest.fn(),
+               create: jest.fn(),
+               update: jest.fn(),
+            },
+         };
+         const clientWithTx = client as typeof client & {
+            $transaction: jest.Mock;
+         };
+         clientWithTx.$transaction = jest.fn(async (arg: unknown) => {
+            if (typeof arg === 'function') {
+               return (arg as (tx: typeof client) => Promise<unknown>)(client);
+            }
+            return Promise.all(arg as Promise<unknown>[]);
+         });
+         return clientWithTx;
+      }),
       Role: {
          LISTENER: 'LISTENER',
          GLOBAL_ADMIN: 'GLOBAL_ADMIN',

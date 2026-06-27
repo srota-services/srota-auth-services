@@ -1,13 +1,14 @@
 import { Role } from '@prisma/client';
+import { attachPrismaTransaction } from '../helpers/prismaMock';
 
-const mockPrisma = {
+const mockPrisma = attachPrismaTransaction({
    user: {
       findUnique: jest.fn(),
    },
    refreshToken: {
       create: jest.fn(),
    },
-};
+});
 
 jest.mock('@prisma/client', () => ({
    PrismaClient: jest.fn(() => mockPrisma),

@@ -11,6 +11,7 @@ jest.mock('../../src/services/subscriptionCatalogInvalidation', () => ({
 }));
 
 import { emitSubscriptionCatalogInvalidation } from '../../src/services/subscriptionCatalogInvalidation';
+import { attachPrismaTransaction } from '../helpers/prismaMock';
 
 const basePlan = {
    id: 'plan_base',
@@ -65,12 +66,7 @@ function makeSubscription(overrides: Record<string, unknown> = {}) {
    };
 }
 
-const mockTx = {
-   userSubscription: { update: jest.fn() },
-   subscriptionBillingEvent: { create: jest.fn() },
-};
-
-const mockPrisma = {
+const mockPrisma = attachPrismaTransaction({
    user: { findUnique: jest.fn() },
    subscriptionPlan: { findUnique: jest.fn() },
    userSubscription: {
@@ -81,8 +77,7 @@ const mockPrisma = {
       update: jest.fn(),
    },
    subscriptionBillingEvent: { create: jest.fn() },
-   $transaction: jest.fn((fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx)),
-} as any;
+}) as any;
 
 describe('UserSubscriptionService', () => {
    let service: UserSubscriptionService;
@@ -90,8 +85,8 @@ describe('UserSubscriptionService', () => {
    beforeEach(() => {
       service = new UserSubscriptionService(mockPrisma);
       jest.clearAllMocks();
-      mockTx.userSubscription.update.mockReset();
-      mockTx.subscriptionBillingEvent.create.mockReset();
+      mockPrisma.userSubscription.update.mockReset();
+      mockPrisma.subscriptionBillingEvent.create.mockReset();
    });
 
    describe('getUserHighestActiveTier', () => {
@@ -116,6 +111,17 @@ describe('UserSubscriptionService', () => {
             service.createSubscription({ userId: 'missing', planId: 'plan1' })
          ).rejects.toBeInstanceOf(SubscriptionError);
       });
+
+      it('rejects conflict when user already has active subscription', async () => {
+         mockPrisma.user.findUnique.mockResolvedValue({ id: 'user-uuid', role: 'LISTENER' });
+         mockPrisma.subscriptionPlan.findUnique.mockResolvedValue(basePlan);
+         mockPrisma.userSubscription.findFirst.mockResolvedValue({ id: 'existing-sub' });
+
+         await expect(
+            service.createSubscription({ userId: 'user-uuid', planId: basePlan.id })
+         ).rejects.toMatchObject({ statusCode: 409 });
+         expect(mockPrisma.userSubscription.create).not.toHaveBeenCalled();
+      });
    });
 
    describe('changeSubscriptionPlan', () => {
@@ -127,20 +133,20 @@ describe('UserSubscriptionService', () => {
             planId: standardPlan.id,
             plan: standardPlan,
          });
-         mockTx.userSubscription.update.mockResolvedValue(upgraded);
+         mockPrisma.userSubscription.update.mockResolvedValue(upgraded);
 
          const result = await service.changeSubscriptionPlan('sub1', standardPlan.id);
 
          expect(result.changeType).toBe('UPGRADE');
          expect(result.prorationAmount).toBeGreaterThan(0);
-         expect(mockTx.userSubscription.update).toHaveBeenCalledWith(
+         expect(mockPrisma.userSubscription.update).toHaveBeenCalledWith(
             expect.objectContaining({
                data: expect.objectContaining({
                   plan: { connect: { id: standardPlan.id } },
                }),
             })
          );
-         expect(mockTx.subscriptionBillingEvent.create).toHaveBeenCalledWith(
+         expect(mockPrisma.subscriptionBillingEvent.create).toHaveBeenCalledWith(
             expect.objectContaining({
                data: expect.objectContaining({
                   type: 'PRORATION_CHARGE',
@@ -165,13 +171,13 @@ describe('UserSubscriptionService', () => {
             pendingPlanChangeType: 'DOWNGRADE',
             pendingPlan: standardPlan,
          });
-         mockTx.userSubscription.update.mockResolvedValue(scheduled);
+         mockPrisma.userSubscription.update.mockResolvedValue(scheduled);
 
          const result = await service.changeSubscriptionPlan('sub1', standardPlan.id);
 
          expect(result.changeType).toBe('DOWNGRADE');
          expect(result.prorationAmount).toBeNull();
-         expect(mockTx.userSubscription.update).toHaveBeenCalledWith(
+         expect(mockPrisma.userSubscription.update).toHaveBeenCalledWith(
             expect.objectContaining({
                data: expect.objectContaining({
                   pendingPlan: { connect: { id: standardPlan.id } },
@@ -179,9 +185,9 @@ describe('UserSubscriptionService', () => {
                }),
             })
          );
-         const updateArg = mockTx.userSubscription.update.mock.calls[0][0];
+         const updateArg = mockPrisma.userSubscription.update.mock.calls[0][0];
          expect(updateArg.data.plan).toBeUndefined();
-         expect(mockTx.subscriptionBillingEvent.create).toHaveBeenCalledWith(
+         expect(mockPrisma.subscriptionBillingEvent.create).toHaveBeenCalledWith(
             expect.objectContaining({
                data: expect.objectContaining({
                   type: 'PLAN_CHANGE_SCHEDULED',
@@ -243,14 +249,14 @@ describe('UserSubscriptionService', () => {
             pendingPlan: standardPlan,
          });
          mockPrisma.userSubscription.findUnique.mockResolvedValue(sub);
-         mockTx.userSubscription.update.mockResolvedValue({
+         mockPrisma.userSubscription.update.mockResolvedValue({
             ...sub,
             planId: standardPlan.id,
          });
 
          await service.renewSubscription('sub1');
 
-         expect(mockTx.userSubscription.update).toHaveBeenCalledWith(
+         expect(mockPrisma.userSubscription.update).toHaveBeenCalledWith(
             expect.objectContaining({
                data: expect.objectContaining({
                   plan: { connect: { id: standardPlan.id } },
@@ -258,7 +264,7 @@ describe('UserSubscriptionService', () => {
                }),
             })
          );
-         expect(mockTx.subscriptionBillingEvent.create).toHaveBeenCalledWith(
+         expect(mockPrisma.subscriptionBillingEvent.create).toHaveBeenCalledWith(
             expect.objectContaining({
                data: expect.objectContaining({
                   type: 'RENEWAL_CHARGE',
