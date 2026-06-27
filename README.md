@@ -48,10 +48,10 @@ auth-service/
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js **26.4.0**
 - PostgreSQL 13+
 - Redis 6+
-- npm or yarn
+- npm **11.17.0** (run `nvm use` / `fnm use` in this directory to match `.nvmrc`)
 
 ## Installation
 
