@@ -17,6 +17,7 @@ import {
    ResetPasswordRequest,
    RevokeTokenRequest,
    GoogleOAuthRequest,
+   GuestAuthRequest,
    VerifyOTPRequest,
    ResendOTPRequest,
    VerifyPasswordChangeOTPRequest,
@@ -265,6 +266,32 @@ export class AuthController {
          });
       } catch (error) {
          handleAuthControllerError(res, error, 'Google OAuth authentication failed');
+      }
+   }
+
+   /**
+    * Create or resume an anonymous guest session
+    */
+   async createGuestSession(req: Request, res: Response): Promise<void> {
+      try {
+         const device = validateDeviceContext(req.body.device);
+         const data: GuestAuthRequest = { ...req.body, device };
+         const result = await authService.createOrResumeGuestSession({
+            ...data,
+            meta: getDeviceRequestMeta(req),
+         });
+
+         if (data.clientType === ClientType.BROWSER && result.refreshToken) {
+            res.cookie('refreshToken', result.refreshToken, getRefreshTokenCookieOptions());
+            delete result.refreshToken;
+         }
+
+         res.json({
+            message: 'Guest session created successfully',
+            ...result,
+         });
+      } catch (error) {
+         handleAuthControllerError(res, error, 'Guest session creation failed');
       }
    }
 

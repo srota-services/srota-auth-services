@@ -34,7 +34,7 @@ process.env['RATE_LIMIT_WINDOW_MS'] = '900000';
 process.env['RATE_LIMIT_MAX_REQUESTS'] = '100';
 process.env['EMAIL_FROM'] = 'test@example.com';
 process.env['EMAIL_SERVICE_URL'] = '';
-process.env['GOOGLE_CLIENT_ID'] = '';
+process.env['GOOGLE_CLIENT_ID'] = 'test-google-client-id';
 process.env['ARGON2_MEMORY'] = '65536';
 process.env['ARGON2_ITERATIONS'] = '3';
 process.env['ARGON2_PARALLELISM'] = '4';
@@ -97,6 +97,7 @@ jest.mock('@prisma/client', () => {
          ORG_ADMIN: 'ORG_ADMIN',
          ORG_COORDINATOR: 'ORG_COORDINATOR',
          AUTHOR: 'AUTHOR',
+         GUEST: 'GUEST',
       },
       BillingInterval: {
          MONTHLY: 'MONTHLY',

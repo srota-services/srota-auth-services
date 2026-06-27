@@ -333,6 +333,57 @@
 
 /**
  * @swagger
+ * /auth/guest:
+ *   post:
+ *     summary: Create or resume anonymous guest session
+ *     description: |
+ *       Creates a new guest user or resumes an existing guest session for the same device.
+ *       Returns JWT access and refresh tokens without requiring signup or login.
+ *       Guest users can browse the public catalog; user-specific features require registration.
+ *     tags: [Auth]
+ *     parameters:
+ *       - in: header
+ *         name: X-CSRF-Token
+ *         schema: { type: string }
+ *         description: CSRF token from GET /auth/csrf-token (required for browser cookie flow)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/GuestAuthRequest'
+ *           examples:
+ *             browser:
+ *               summary: Browser guest session
+ *               value:
+ *                 clientType: "browser"
+ *                 device:
+ *                   deviceId: "browser-abc123"
+ *                   deviceName: "Chrome on Windows"
+ *                   platform: "web"
+ *             mobile:
+ *               summary: Mobile guest session
+ *               value:
+ *                 clientType: "mobile"
+ *                 device:
+ *                   deviceId: "mobile-device-001"
+ *                   deviceName: "iPhone 15"
+ *                   platform: "ios"
+ *     responses:
+ *       200:
+ *         description: Guest session created or resumed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: Invalid device context
+ *       429:
+ *         description: Too many guest session requests
+ */
+
+/**
+ * @swagger
  * /auth/refresh:
  *   post:
  *     summary: Refresh access token

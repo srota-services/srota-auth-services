@@ -353,6 +353,20 @@ const options: swaggerJsdoc.Options = {
                   },
                },
             },
+            GuestAuthRequest: {
+               type: 'object',
+               required: ['device'],
+               properties: {
+                  device: { $ref: '#/components/schemas/DeviceContext' },
+                  clientType: {
+                     type: 'string',
+                     enum: ['browser', 'mobile'],
+                     example: 'browser',
+                     description:
+                        'Optional. When "browser", refresh token is set as httpOnly cookie and omitted from the response body.',
+                  },
+               },
+            },
             AuthUser: {
                type: 'object',
                required: ['id', 'email', 'role', 'emailVerified'],
@@ -361,7 +375,7 @@ const options: swaggerJsdoc.Options = {
                   email: { type: 'string', format: 'email', example: 'user@example.com' },
                   role: {
                      type: 'string',
-                     enum: ['LISTENER', 'GLOBAL_ADMIN', 'ORG_ADMIN', 'ORG_COORDINATOR', 'AUTHOR'],
+                     enum: ['LISTENER', 'GLOBAL_ADMIN', 'ORG_ADMIN', 'ORG_COORDINATOR', 'AUTHOR', 'GUEST'],
                      example: 'LISTENER',
                   },
                   emailVerified: { type: 'boolean', example: true },

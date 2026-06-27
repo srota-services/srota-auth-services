@@ -2,6 +2,7 @@ import { Role } from '@prisma/client';
 import { RegisterRequest, ValidationError } from '../types';
 import { validateRegistrationPassword } from './passwordValidation';
 import { validateIndianContact } from './phoneValidation';
+import { isGuestEmail } from '../constants/guestUser';
 
 const PUBLIC_REGISTER_ROLES = new Set<Role>([
    Role.LISTENER,
@@ -62,6 +63,12 @@ export function validateRegisterRequest(
 
    if (!email || typeof email !== 'string') {
       throw new ValidationError('Email is required', { email: ['Email is required'] });
+   }
+
+   if (isGuestEmail(email)) {
+      throw new ValidationError('Invalid email', {
+         email: ['This email address cannot be used for registration'],
+      });
    }
 
    if (!password || typeof password !== 'string') {
