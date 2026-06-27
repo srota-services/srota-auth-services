@@ -1,7 +1,8 @@
 import { SubscriptionPlanService } from '../../src/services/SubscriptionPlanService';
 import { SubscriptionError } from '../../src/types/subscription';
+import { attachPrismaTransaction } from '../helpers/prismaMock';
 
-const mockPrisma = {
+const mockPrisma = attachPrismaTransaction({
    subscriptionPlan: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -12,7 +13,7 @@ const mockPrisma = {
       count: jest.fn(),
    },
    userSubscription: { count: jest.fn() },
-} as any;
+}) as any;
 
 describe('SubscriptionPlanService', () => {
    let service: SubscriptionPlanService;
