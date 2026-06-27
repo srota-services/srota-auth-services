@@ -69,6 +69,16 @@ function keysForResource(
             ['user-audiobooks'],
             ['user-audiobooks', 'me'],
          ];
+      case 'subscription-gating': {
+         const planId = relatedIds['planId'] ?? id;
+         return [
+            ['subscription-plans'],
+            ['subscription-plans', planId],
+            ['audiobooks'],
+            ['user-audiobooks'],
+            ['user-audiobooks', 'me'],
+         ];
+      }
       case 'user-device':
          return [['devices'], ['devices', id]];
       default:

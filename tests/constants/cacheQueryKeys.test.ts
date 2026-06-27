@@ -57,4 +57,20 @@ describe('buildCacheInvalidationEvent (auth)', () => {
       );
       expect(event.relatedIds).toEqual({ userId: 'user-1', planId: 'plan-1' });
    });
+
+   it('builds subscription-gating keys including plans and catalog', () => {
+      const event = buildCacheInvalidationEvent('subscription-gating', 'updated', 'plan-1', {
+         planId: 'plan-1',
+      });
+
+      expect(event.queryKeys).toEqual(
+         expect.arrayContaining([
+            ['subscription-plans'],
+            ['subscription-plans', 'plan-1'],
+            ['audiobooks'],
+            ['user-audiobooks'],
+            ['user-audiobooks', 'me'],
+         ]),
+      );
+   });
 });
