@@ -381,6 +381,63 @@ const options: swaggerJsdoc.Options = {
                   emailVerified: { type: 'boolean', example: true },
                },
             },
+            UserProfile: {
+               allOf: [
+                  { $ref: '#/components/schemas/AuthUser' },
+                  {
+                     type: 'object',
+                     properties: {
+                        firstName: { type: 'string', example: 'Jane' },
+                        lastName: { type: 'string', example: 'Doe' },
+                        address: { type: 'string', example: '123 Main St, Mumbai' },
+                        contact: { type: 'string', example: '+919876543210' },
+                        gender: {
+                           type: 'string',
+                           enum: ['MALE', 'FEMALE', 'NON_BINARY', 'OTHER', 'PREFER_NOT_TO_SAY'],
+                        },
+                        location: {
+                           type: 'string',
+                           example: 'Mumbai, Maharashtra, India',
+                           description: 'Resolved place name from coordinates',
+                        },
+                        age: { type: 'integer', example: 28 },
+                        createdAt: { type: 'string', format: 'date-time' },
+                        updatedAt: { type: 'string', format: 'date-time' },
+                     },
+                  },
+               ],
+            },
+            LocationCoordinatesInput: {
+               type: 'object',
+               required: ['latitude', 'longitude'],
+               properties: {
+                  latitude: { type: 'number', format: 'double', example: 19.076, minimum: -90, maximum: 90 },
+                  longitude: { type: 'number', format: 'double', example: 72.8777, minimum: -180, maximum: 180 },
+               },
+            },
+            UpdateUserProfileRequest: {
+               type: 'object',
+               description: 'At least one field required. Guests may only send `location`.',
+               properties: {
+                  firstName: { type: 'string', minLength: 1, maxLength: 50 },
+                  lastName: { type: 'string', minLength: 1, maxLength: 50 },
+                  address: { type: 'string', nullable: true, maxLength: 500 },
+                  contact: { type: 'string', nullable: true, maxLength: 50 },
+                  gender: {
+                     type: 'string',
+                     nullable: true,
+                     enum: ['MALE', 'FEMALE', 'NON_BINARY', 'OTHER', 'PREFER_NOT_TO_SAY'],
+                  },
+                  location: {
+                     oneOf: [
+                        { $ref: '#/components/schemas/LocationCoordinatesInput' },
+                        { type: 'null' },
+                     ],
+                     description: 'Coordinates to resolve, or null to clear. Only field guests may update.',
+                  },
+                  age: { type: 'integer', nullable: true, minimum: 1, maximum: 150 },
+               },
+            },
             AuthResponse: {
                type: 'object',
                required: ['accessToken', 'user'],

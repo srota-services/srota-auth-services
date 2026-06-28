@@ -10,6 +10,7 @@ import { DomainError } from '../types/domain';
 import { AuthRoleGroups } from '../constants/authRoles';
 
 export { validateCsrf, requiresCsrfProtection } from './csrf';
+export { blockGuestMutations, isGuestLocationOnlyProfileUpdate } from './roleMiddleware';
 
 /**
  * Authentication middleware
