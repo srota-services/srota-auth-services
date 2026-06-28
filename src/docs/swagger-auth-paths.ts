@@ -339,7 +339,9 @@
  *     description: |
  *       Creates a new guest user or resumes an existing guest session for the same device.
  *       Returns JWT access and refresh tokens without requiring signup or login.
- *       Guest users can browse the public catalog; user-specific features require registration.
+ *       Guest users can browse the catalog via GET (active content only).
+ *       POST, PUT, PATCH, and DELETE return 403 except PUT /auth/user/profile
+ *       when only `location` is being updated; streaming is not available for guests.
  *     tags: [Auth]
  *     parameters:
  *       - in: header
@@ -491,6 +493,78 @@
  *               role: "ORG_ADMIN"
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
+ */
+
+/**
+ * @swagger
+ * /auth/user/profile:
+ *   get:
+ *     summary: Get current user profile
+ *     description: Returns demographic profile fields stored on the auth User model.
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user:
+ *                   $ref: '#/components/schemas/UserProfile'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *   put:
+ *     summary: Update current user profile
+ *     description: |
+ *       Updates demographic fields on the auth User model. Location is resolved from
+ *       latitude/longitude coordinates to a human-readable place name.
+ *
+ *       **Guest users:** only `location` may be updated (including `null` to clear).
+ *       Other profile fields require a registered account.
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateUserProfileRequest'
+ *           examples:
+ *             locationOnly:
+ *               summary: Update location (allowed for guests)
+ *               value:
+ *                 location:
+ *                   latitude: 19.076
+ *                   longitude: 72.8777
+ *             clearLocation:
+ *               summary: Clear stored location
+ *               value:
+ *                 location: null
+ *     responses:
+ *       200:
+ *         description: Profile updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Profile updated successfully
+ *                 user:
+ *                   $ref: '#/components/schemas/UserProfile'
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         description: Guest attempted to update non-location profile fields
  */
 
 /**
