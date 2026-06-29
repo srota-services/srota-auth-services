@@ -5,6 +5,12 @@ import { config } from '../../src/config/env';
 jest.mock('amqplib', () => {
    const mockChannel = {
       assertExchange: jest.fn().mockResolvedValue(undefined),
+      assertQueue: jest.fn().mockResolvedValue(undefined),
+      bindQueue: jest.fn().mockResolvedValue(undefined),
+      prefetch: jest.fn().mockResolvedValue(undefined),
+      consume: jest.fn().mockResolvedValue({ consumerTag: 'test-consumer' }),
+      ack: jest.fn(),
+      cancel: jest.fn().mockResolvedValue(undefined),
       publish: jest.fn().mockReturnValue(true),
       close: jest.fn().mockResolvedValue(undefined),
    };
