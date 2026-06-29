@@ -1,3 +1,4 @@
+import { SubscriptionTierLevel } from '@prisma/client';
 import { SubscriptionPlanService } from '../../src/services/SubscriptionPlanService';
 import { SubscriptionError } from '../../src/types/subscription';
 import { attachPrismaTransaction } from '../helpers/prismaMock';
@@ -31,7 +32,7 @@ describe('SubscriptionPlanService', () => {
          description: null,
          price: '9.99',
          currency: 'USD',
-         tierLevel: 1,
+         tierLevel: SubscriptionTierLevel.BASE,
          billingInterval: 'MONTHLY',
          trialDays: 0,
          features: null,
@@ -39,13 +40,13 @@ describe('SubscriptionPlanService', () => {
          createdAt: new Date(),
          updatedAt: new Date(),
       });
-      const result = await service.createPlan({ name: 'Premium', price: 9.99 });
+      const result = await service.createPlan({ name: 'Premium', price: 9.99, tierLevel: SubscriptionTierLevel.PREMIUM });
       expect(result.name).toBe('Premium');
       expect(result.price).toBe(9.99);
    });
 
    it('throws conflict on duplicate name', async () => {
       mockPrisma.subscriptionPlan.findFirst.mockResolvedValue({ id: 'p1', name: 'Premium' });
-      await expect(service.createPlan({ name: 'Premium', price: 1 })).rejects.toBeInstanceOf(SubscriptionError);
+      await expect(service.createPlan({ name: 'Premium', price: 1, tierLevel: SubscriptionTierLevel.PREMIUM })).rejects.toBeInstanceOf(SubscriptionError);
    });
 });

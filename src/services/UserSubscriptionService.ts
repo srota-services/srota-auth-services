@@ -7,7 +7,9 @@ import {
    BillingEventType,
    SubscriptionPlan,
    UserSubscription,
+   SubscriptionTierLevel,
 } from '@prisma/client';
+import { SUBSCRIPTION_TIER_ORDER } from '../constants/subscriptionTierLevel';
 import {
    UserSubscriptionDto,
    UserSubscriptionWithPlan,
@@ -77,7 +79,7 @@ function planPriceToDecimal(price: SubscriptionPlan['price']): Prisma.Decimal {
 export class UserSubscriptionService {
    constructor(private prisma: PrismaClient) {}
 
-   async getUserHighestActiveTier(userId: string): Promise<number | null> {
+   async getUserHighestActiveTier(userId: string): Promise<SubscriptionTierLevel | null> {
       const subs = await this.prisma.userSubscription.findMany({
          where: {
             userId,
@@ -86,10 +88,12 @@ export class UserSubscriptionService {
          include: { plan: true },
       });
       if (subs.length === 0) return null;
-      let highest: number | null = null;
+      let highest: SubscriptionTierLevel | null = null;
       for (const sub of subs) {
          const tier = sub.plan.tierLevel;
-         if (highest === null || tier > highest) highest = tier;
+         if (highest === null || SUBSCRIPTION_TIER_ORDER[tier] > SUBSCRIPTION_TIER_ORDER[highest]) {
+            highest = tier;
+         }
       }
       return highest;
    }
@@ -311,7 +315,7 @@ export class UserSubscriptionService {
 
          const now = new Date();
 
-         if (targetPlan.tierLevel > existing.plan.tierLevel) {
+         if (SUBSCRIPTION_TIER_ORDER[targetPlan.tierLevel] > SUBSCRIPTION_TIER_ORDER[existing.plan.tierLevel]) {
             const { prorationAmount, remainingRatio } = computeProration({
                oldPrice: existing.plan.price,
                newPrice: targetPlan.price,

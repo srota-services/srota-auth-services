@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { SubscriptionTierLevel } from '@prisma/client';
 import { UserSubscriptionController } from '../../src/controllers/UserSubscriptionController';
 import { UserSubscriptionService } from '../../src/services/UserSubscriptionService';
 import { AuthRole } from '../../src/constants/authRoles';
@@ -40,7 +41,7 @@ describe('UserSubscriptionController role gating', () => {
    });
 
    test('getMyTier looks up tier for LISTENER', async () => {
-      mockService.getUserHighestActiveTier.mockResolvedValue(2);
+      mockService.getUserHighestActiveTier.mockResolvedValue(SubscriptionTierLevel.STANDARD);
       const req = {
          user: { id: 'listener-1', role: AuthRole.LISTENER },
       } as any;
@@ -49,7 +50,7 @@ describe('UserSubscriptionController role gating', () => {
       await controller.getMyTier(req, res);
 
       expect(mockService.getUserHighestActiveTier).toHaveBeenCalledWith('listener-1');
-      expect(res.json).toHaveBeenCalledWith({ tier: 2 });
+      expect(res.json).toHaveBeenCalledWith({ tier: SubscriptionTierLevel.STANDARD });
    });
 
    test('getMySubscription skips lookup for GLOBAL_ADMIN', async () => {

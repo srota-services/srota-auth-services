@@ -1,4 +1,4 @@
-import { BillingInterval, SubscriptionStatus } from '@prisma/client';
+import { BillingInterval, SubscriptionStatus, SubscriptionTierLevel } from '@prisma/client';
 import { UserSubscriptionService } from '../../src/services/UserSubscriptionService';
 import { SubscriptionError } from '../../src/types/subscription';
 
@@ -18,7 +18,7 @@ const basePlan = {
    name: 'Base',
    price: { toString: () => '99' },
    currency: 'INR',
-   tierLevel: 1,
+   tierLevel: SubscriptionTierLevel.BASE,
    billingInterval: BillingInterval.MONTHLY,
    isActive: true,
 };
@@ -28,7 +28,7 @@ const standardPlan = {
    name: 'Standard',
    price: { toString: () => '249' },
    currency: 'INR',
-   tierLevel: 2,
+   tierLevel: SubscriptionTierLevel.STANDARD,
    billingInterval: BillingInterval.MONTHLY,
    isActive: true,
 };
@@ -38,7 +38,7 @@ const premiumPlan = {
    name: 'Premium',
    price: { toString: () => '399' },
    currency: 'INR',
-   tierLevel: 3,
+   tierLevel: SubscriptionTierLevel.PREMIUM,
    billingInterval: BillingInterval.MONTHLY,
    isActive: true,
 };
@@ -92,10 +92,10 @@ describe('UserSubscriptionService', () => {
    describe('getUserHighestActiveTier', () => {
       it('returns max tier among ACTIVE and TRIALING', async () => {
          mockPrisma.userSubscription.findMany.mockResolvedValue([
-            { plan: { tierLevel: 1 } },
-            { plan: { tierLevel: 3 } },
+            { plan: { tierLevel: SubscriptionTierLevel.BASE } },
+            { plan: { tierLevel: SubscriptionTierLevel.PREMIUM } },
          ]);
-         await expect(service.getUserHighestActiveTier('user-uuid')).resolves.toBe(3);
+         await expect(service.getUserHighestActiveTier('user-uuid')).resolves.toBe(SubscriptionTierLevel.PREMIUM);
       });
 
       it('returns null when no qualifying subscriptions', async () => {

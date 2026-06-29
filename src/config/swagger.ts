@@ -226,8 +226,9 @@ const options: swaggerJsdoc.Options = {
                   id: { type: 'string' },
                   name: { type: 'string', example: 'Premium' },
                   tierLevel: {
-                     type: 'integer',
-                     example: 2,
+                     type: 'string',
+                     enum: ['BASE', 'STANDARD', 'PREMIUM'],
+                     example: 'STANDARD',
                      description:
                         'Hierarchical access tier. app-service compares this against audiobook/chapter minSubscriptionTier for content gating.',
                   },

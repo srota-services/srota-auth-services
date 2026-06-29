@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma, BillingInterval } from '@prisma/client';
+import { PrismaClient, Prisma, BillingInterval, SubscriptionTierLevel } from '@prisma/client';
 import {
    SubscriptionPlanDto,
    CreateSubscriptionPlanDto,
@@ -26,7 +26,7 @@ export class SubscriptionPlanService {
          });
          if (existing) throw SubscriptionError.conflict(msg.name_exists);
          if (data.price < 0) throw SubscriptionError.validation(msg.price_invalid);
-         if (data.tierLevel !== undefined && (!Number.isInteger(data.tierLevel) || data.tierLevel < 0)) {
+         if (!Object.values(SubscriptionTierLevel).includes(data.tierLevel)) {
             throw SubscriptionError.validation(msg.tier_invalid);
          }
 
@@ -37,7 +37,7 @@ export class SubscriptionPlanService {
                   description: data.description ?? null,
                   price: new Prisma.Decimal(data.price),
                   currency: data.currency ?? 'USD',
-                  tierLevel: data.tierLevel ?? 0,
+                  tierLevel: data.tierLevel,
                   billingInterval: data.billingInterval ?? BillingInterval.MONTHLY,
                   trialDays: data.trialDays ?? 0,
                   features: data.features === undefined ? Prisma.JsonNull : (data.features as Prisma.InputJsonValue),
@@ -111,7 +111,7 @@ export class SubscriptionPlanService {
          }
          if (data.currency !== undefined) updateData.currency = data.currency;
          if (data.tierLevel !== undefined) {
-            if (!Number.isInteger(data.tierLevel) || data.tierLevel < 0) {
+            if (!Object.values(SubscriptionTierLevel).includes(data.tierLevel)) {
                throw SubscriptionError.validation(msg.tier_invalid);
             }
             updateData.tierLevel = data.tierLevel;
