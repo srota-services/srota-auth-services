@@ -70,14 +70,25 @@ function keysForResource(
             ['user-audiobooks', 'me'],
          ];
       case 'subscription-gating': {
-         const planId = relatedIds['planId'] ?? id;
-         return [
+         const planId = relatedIds['planId'];
+         const audiobookId = relatedIds['audiobookId'];
+         const chapterId = relatedIds['chapterId'];
+         const keys: string[][] = [
             ['subscription-plans'],
-            ['subscription-plans', planId],
             ['audiobooks'],
             ['user-audiobooks'],
             ['user-audiobooks', 'me'],
          ];
+         if (planId) {
+            keys.push(['subscription-plans', planId]);
+         }
+         if (audiobookId) {
+            keys.push(['audiobooks', audiobookId], ['audiobooks', audiobookId, 'chapters']);
+            if (chapterId) {
+               keys.push(['audiobooks', audiobookId, 'chapters', chapterId]);
+            }
+         }
+         return keys;
       }
       case 'user-device':
          return [['devices'], ['devices', id]];

@@ -523,7 +523,7 @@ const options: swaggerJsdoc.Options = {
                type: 'object',
                required: ['version', 'service', 'resource', 'action', 'id', 'queryKeys', 'timestamp'],
                description:
-                  'TanStack Query cache-invalidation payload emitted on SSE event `cache-invalidate`. Loop queryKeys and call queryClient.invalidateQueries({ queryKey }) for each. For `subscription-catalog`, skip when relatedIds.userId does not match the current user; use removeQueries then invalidateQueries so tier-gated audiobook/chapter cache is cleared and refetched. For `subscription-gating`, invalidate when subscription plan tier definitions change (includes audiobook catalog keys; prefix `audiobooks` covers chapter queries).',
+                  'TanStack Query cache-invalidation payload emitted on SSE event `cache-invalidate`. Loop queryKeys and call queryClient.invalidateQueries({ queryKey }) for each. For `subscription-catalog`, skip when relatedIds.userId does not match the current user; use removeQueries then invalidateQueries so tier-gated audiobook/chapter cache is cleared and refetched. For `subscription-gating`, invalidate when subscription plan tier definitions change or when chapter minSubscriptionTier changes are relayed from app-service (relatedIds.chapterId and relatedIds.audiobookId).',
                properties: {
                   version: { type: 'integer', example: 1 },
                   service: { type: 'string', enum: ['auth'], example: 'auth' },
@@ -531,7 +531,7 @@ const options: swaggerJsdoc.Options = {
                      type: 'string',
                      example: 'organization',
                      description:
-                        'Stable entity name (user, organization, subscription-plan, user-subscription, subscription-catalog, subscription-gating, …). subscription-catalog is emitted when a user effective subscription tier changes. subscription-gating is emitted when subscription plan tier definitions change.',
+                        'Stable entity name (user, organization, subscription-plan, user-subscription, subscription-catalog, subscription-gating, …). subscription-catalog is emitted when a user effective subscription tier changes. subscription-gating is emitted when subscription plan tier definitions change or when chapter minSubscriptionTier changes are relayed from app-service.',
                   },
                   action: { type: 'string', enum: ['created', 'updated', 'deleted'] },
                   id: { type: 'string', example: 'corg1234567890abcdefghij' },

@@ -95,6 +95,7 @@
  * /auth/subscriptions/me:
  *   get:
  *     summary: Get my active subscription
+ *     description: Returns the active subscription for LISTENER and GUEST users. Other roles receive `subscription: null` without a database lookup.
  *     tags: [Subscriptions]
  *     security:
  *       - bearerAuth: []
@@ -115,6 +116,7 @@
  * /auth/subscriptions/me/tier:
  *   get:
  *     summary: Get my highest active tier level
+ *     description: Returns the highest active tier for LISTENER and GUEST users. Other roles receive `{ tier: null }` without a database lookup.
  *     tags: [Subscriptions]
  *     security:
  *       - bearerAuth: []
