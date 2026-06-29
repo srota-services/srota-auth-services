@@ -11,7 +11,7 @@ import {
 import { AuthenticatedSubscriptionRequest, SubscriptionError } from '../types/subscription';
 import { subscriptionMessages } from '../utils/subscriptionMessages';
 import { handleSubscriptionError, calculatePagination } from '../utils/subscriptionController';
-import { isGlobalAdminRole } from '../constants/authRoles';
+import { isGlobalAdminRole, isSubscriptionGatingEnforcedRole } from '../constants/authRoles';
 
 export class UserSubscriptionController {
    private subscriptionService: UserSubscriptionService;
@@ -86,6 +86,13 @@ export class UserSubscriptionController {
    getMySubscription = async (req: Request, res: Response): Promise<void> => {
       try {
          const authUser = this.getAuthUser(req);
+         if (!isSubscriptionGatingEnforcedRole(authUser.role)) {
+            res.status(200).json({
+               message: subscriptionMessages.success.user_subscriptions.retrieved_by_id,
+               subscription: null,
+            });
+            return;
+         }
          const sub = await this.subscriptionService.getActiveSubscriptionForUser(authUser.id);
          res.status(200).json({
             message: subscriptionMessages.success.user_subscriptions.retrieved_by_id,
@@ -122,6 +129,10 @@ export class UserSubscriptionController {
    getMyTier = async (req: Request, res: Response): Promise<void> => {
       try {
          const authUser = this.getAuthUser(req);
+         if (!isSubscriptionGatingEnforcedRole(authUser.role)) {
+            res.status(200).json({ tier: null });
+            return;
+         }
          const tier = await this.subscriptionService.getUserHighestActiveTier(authUser.id);
          res.status(200).json({ tier });
       } catch (error) {

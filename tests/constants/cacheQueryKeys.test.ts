@@ -73,4 +73,20 @@ describe('buildCacheInvalidationEvent (auth)', () => {
          ]),
       );
    });
+
+   it('builds subscription-gating keys scoped to chapter tier changes', () => {
+      const event = buildCacheInvalidationEvent('subscription-gating', 'updated', 'ch-1', {
+         audiobookId: 'ab-1',
+         chapterId: 'ch-1',
+      });
+
+      expect(event.queryKeys).toEqual(
+         expect.arrayContaining([
+            ['audiobooks'],
+            ['audiobooks', 'ab-1'],
+            ['audiobooks', 'ab-1', 'chapters'],
+            ['audiobooks', 'ab-1', 'chapters', 'ch-1'],
+         ]),
+      );
+   });
 });

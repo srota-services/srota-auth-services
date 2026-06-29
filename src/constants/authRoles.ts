@@ -91,6 +91,15 @@ export function isDeviceLimitEnforcedRole(role: string | undefined): boolean {
    return normalizeAuthRole(role) === normalizeAuthRole(AuthRole.LISTENER);
 }
 
+/** Active subscription tier checks apply to LISTENER and GUEST only. */
+export function isSubscriptionGatingEnforcedRole(role: string | undefined): boolean {
+   const normalized = normalizeAuthRole(role);
+   return (
+      normalized === normalizeAuthRole(AuthRole.LISTENER) ||
+      normalized === normalizeAuthRole(AuthRole.GUEST)
+   );
+}
+
 export function isPartnerAppRole(role: string | undefined): boolean {
    const normalized = normalizeAuthRole(role);
    return AuthRoleGroups.PARTNER_APP.some(
