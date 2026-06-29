@@ -22,7 +22,7 @@ All require `Authorization: Bearer <accessToken>`.
 |--------|------|--------|
 | GET | `/me` | User — active subscription |
 | GET | `/me/history` | User |
-| GET | `/me/tier` | User — `{ tier: number \| null }` |
+| GET | `/me/tier` | User — `{ tier: "BASE" \| "STANDARD" \| "PREMIUM" \| null }` |
 | GET | `/user/:userId` | Self or Admin |
 | GET | `/` | Admin |
 | POST | `/` | User (`planId`; optional `userId` for admin) |
@@ -78,14 +78,14 @@ Content tier gating is configured in **app-service** on audiobooks and chapters 
 
 | `subscriptionGatingMode` | Where tier is set | Access behavior |
 |--------------------------|-------------------|-----------------|
-| `NONE` | nowhere | No subscription required |
-| `AUDIOBOOK` | `audiobook.minSubscriptionTier` | Whole book gated; chapters inherit the audiobook tier |
-| `CHAPTER` | uniform `chapter.minSubscriptionTier` on every chapter | Audiobook detail is open; each chapter returns its own `subscriptionAccess` |
+| `NONE` | nowhere | Logged-in users pass; no subscription required |
+| `AUDIOBOOK` | `audiobook.minSubscriptionTier` | Whole book gated; chapters inherit the audiobook tier on create |
+| `CHAPTER` | per-chapter `minSubscriptionTier` | Audiobook detail is open; each chapter returns its own `subscriptionAccess` |
 
 Rules enforced by app-service:
 
-- Audiobook-level gating: chapters cannot have their own `minSubscriptionTier`.
-- Chapter-level gating: all chapters in an audiobook must share the same tier (no mixing tier 1 and tier 2).
+- **AUDIOBOOK gating:** `minSubscriptionTier` is set on the audiobook. New chapters inherit that tier. Client cannot set a different tier on chapters.
+- **CHAPTER gating:** each chapter requires an explicit `minSubscriptionTier` on create (`null` = free). Tiers must be **non-decreasing** by `chapterNumber` (e.g. free → BASE → STANDARD). Adjacent chapters may share the same tier. At most **two tier step-ups** across the audiobook. Tiers **cannot be reduced** on update.
 - User tier is resolved via `GET /auth/subscriptions/me/tier` with the same JWT.
 
 `GET /api/v1/audiobooks/:id` returns audiobook `subscriptionAccess`. Chapter list/detail includes per-chapter `subscriptionAccess`. Set `AUTH_SERVICE_URL` in app-service.

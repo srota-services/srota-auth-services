@@ -145,6 +145,12 @@ enum BillingEventType {
    PLAN_CHANGE_SCHEDULED
 }
 
+enum SubscriptionTierLevel {
+   BASE
+   STANDARD
+   PREMIUM
+}
+
 model SubscriptionPlan {
    id          String  @id @default(cuid())
    name        String  @unique
@@ -153,7 +159,7 @@ model SubscriptionPlan {
    price    Decimal @db.Decimal(10, 2)
    currency String  @default("USD")
 
-   tierLevel Int @default(0)
+   tierLevel SubscriptionTierLevel
 
    billingInterval BillingInterval @default(MONTHLY)
    trialDays       Int             @default(0)

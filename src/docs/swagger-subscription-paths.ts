@@ -37,7 +37,7 @@
  *             required: [name, tierLevel, price, currency, interval]
  *             properties:
  *               name: { type: string, example: "Premium" }
- *               tierLevel: { type: integer, example: 2 }
+ *               tierLevel: { type: string, enum: [BASE, STANDARD, PREMIUM], example: "PREMIUM" }
  *               price: { type: number, example: 9.99 }
  *               currency: { type: string, example: "USD" }
  *               interval: { type: string, example: "month" }
@@ -95,7 +95,7 @@
  * /auth/subscriptions/me:
  *   get:
  *     summary: Get my active subscription
- *     description: Returns the active subscription for LISTENER and GUEST users. Other roles receive `subscription: null` without a database lookup.
+ *     description: 'Returns the active subscription for LISTENER and GUEST users. Other roles receive subscription null without a database lookup.'
  *     tags: [Subscriptions]
  *     security:
  *       - bearerAuth: []
@@ -116,7 +116,7 @@
  * /auth/subscriptions/me/tier:
  *   get:
  *     summary: Get my highest active tier level
- *     description: Returns the highest active tier for LISTENER and GUEST users. Other roles receive `{ tier: null }` without a database lookup.
+ *     description: 'Returns the highest active tier for LISTENER and GUEST users. Other roles receive tier null without a database lookup.'
  *     tags: [Subscriptions]
  *     security:
  *       - bearerAuth: []
@@ -125,7 +125,14 @@
  *         description: Tier level
  *         content:
  *           application/json:
- *             example: { tierLevel: 2 }
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 tier:
+ *                   type: string
+ *                   enum: [BASE, STANDARD, PREMIUM]
+ *                   nullable: true
+ *                   example: STANDARD
  */
 
 /**
