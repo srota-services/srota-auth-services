@@ -86,7 +86,7 @@ Rules enforced by app-service:
 
 - **AUDIOBOOK gating:** `minSubscriptionTier` is set on the audiobook. New chapters inherit that tier. Client cannot set a different tier on chapters.
 - **CHAPTER gating:** each chapter requires an explicit `minSubscriptionTier` on create (`null` = free). Tiers must be **non-decreasing** by `chapterNumber` (e.g. free → BASE → STANDARD). Adjacent chapters may share the same tier. At most **two tier step-ups** across the audiobook. Tiers **cannot be reduced** on update.
-- User tier is resolved via `GET /auth/subscriptions/me/tier` with the same JWT.
+- User tier is resolved via `GET /auth/subscriptions/me/tier` with the same JWT. App-service and streaming-service both call this endpoint for LISTENER subscription gating on stream access.
 
 `GET /api/v1/audiobooks/:id` returns audiobook `subscriptionAccess`. Chapter list/detail includes per-chapter `subscriptionAccess`. Set `AUTH_SERVICE_URL` in app-service.
 
