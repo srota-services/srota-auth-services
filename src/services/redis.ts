@@ -384,6 +384,30 @@ export class RedisService {
    createSubscriberClient(): ReturnType<RedisClientType['duplicate']> {
       return this.client.duplicate();
    }
+
+   /**
+    * Acquire a short-lived distributed lock (SET NX EX). Returns true if lock was acquired.
+    */
+   async acquireLock(key: string, ttlSeconds: number): Promise<boolean> {
+      try {
+         const result = await this.client.set(key, '1', { NX: true, EX: ttlSeconds });
+         return result === 'OK';
+      } catch (error) {
+         redisLogger.error({ err: error, key }, 'Failed to acquire Redis lock');
+         return false;
+      }
+   }
+
+   /**
+    * Release a distributed lock.
+    */
+   async releaseLock(key: string): Promise<void> {
+      try {
+         await this.client.del(key);
+      } catch (error) {
+         redisLogger.error({ err: error, key }, 'Failed to release Redis lock');
+      }
+   }
 }
 
 // Singleton instance

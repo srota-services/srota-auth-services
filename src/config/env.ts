@@ -50,6 +50,18 @@ function requireIntEnv(key: string): number {
    return parsed;
 }
 
+function optionalEnv(key: string, defaultValue: string): string {
+   return process.env[key] ?? defaultValue;
+}
+
+function optionalBoolEnv(key: string, defaultValue: boolean): boolean {
+   const value = process.env[key];
+   if (value === undefined) {
+      return defaultValue;
+   }
+   return value === 'true' || value === '1';
+}
+
 function assertNoLocalhost(envVar: string, value: string, nodeEnv: string): void {
    if (LOCALHOST_PATTERN.test(value)) {
       throw new Error(`${envVar} must not reference localhost in ${nodeEnv}`);
@@ -159,4 +171,9 @@ export const config = {
 
    NOMINATIM_BASE_URL: requireEnv('NOMINATIM_BASE_URL'),
    NOMINATIM_USER_AGENT: requireEnv('NOMINATIM_USER_AGENT'),
+
+   SUBSCRIPTION_DOWNGRADE_CRON: optionalEnv('SUBSCRIPTION_DOWNGRADE_CRON', '1 0 * * *'),
+   SUBSCRIPTION_RENEWAL_CRON: optionalEnv('SUBSCRIPTION_RENEWAL_CRON', '0 0 * * *'),
+   SUBSCRIPTION_EXPIRATION_CRON: optionalEnv('SUBSCRIPTION_EXPIRATION_CRON', '2 0 * * *'),
+   SUBSCRIPTION_JOBS_ENABLED: optionalBoolEnv('SUBSCRIPTION_JOBS_ENABLED', nodeEnv !== 'test'),
 };
