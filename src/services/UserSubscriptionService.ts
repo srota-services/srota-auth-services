@@ -30,6 +30,7 @@ import { emitSubscriptionCatalogInvalidation } from './subscriptionCatalogInvali
 import { isGuestRole } from '../constants/authRoles';
 import { runInTransaction, runWrite } from '../utils/prismaTransaction';
 import { rethrowServiceError } from '../utils/serviceError';
+import { appLogger } from '../utils/logger';
 
 const planMsg = subscriptionMessages.error.subscription_plans;
 const subMsg = subscriptionMessages.error.user_subscriptions;
@@ -44,6 +45,14 @@ type SubscriptionWithPlans = UserSubscription & {
    plan: SubscriptionPlan;
    pendingPlan: SubscriptionPlan | null;
 };
+
+export interface ApplyDuePendingDowngradesResult {
+   processed: number;
+   failed: number;
+   errors: Array<{ subscriptionId: string; message: string }>;
+}
+
+export type SubscriptionJobBatchResult = ApplyDuePendingDowngradesResult;
 
 function addMonths(date: Date, months: number): Date {
    const result = new Date(date.getTime());
@@ -461,6 +470,181 @@ export class UserSubscriptionService {
       return existing.pendingPlan;
    }
 
+   private buildPendingPlanSwapUpdate(pendingPlan: SubscriptionPlan): Prisma.UserSubscriptionUpdateInput {
+      return {
+         plan: { connect: { id: pendingPlan.id } },
+         pendingPlan: { disconnect: true },
+         pendingPlanChangeAt: null,
+         pendingPlanChangeType: null,
+      };
+   }
+
+   private emitPendingPlanApplied(subscriptionId: string, userId: string, planId: string): void {
+      emitCacheInvalidation('user-subscription', 'updated', subscriptionId, { userId });
+      emitSubscriptionCatalogInvalidation({
+         userId,
+         subscriptionId,
+         planId,
+         action: 'updated',
+      });
+   }
+
+   async applyPendingDowngrade(subscriptionId: string): Promise<UserSubscriptionDto> {
+      try {
+         const existing = await this.prisma.userSubscription.findUnique({
+            where: { id: subscriptionId },
+            include: subscriptionInclude,
+         });
+         if (!existing) throw SubscriptionError.notFound(subMsg.not_found);
+
+         const now = new Date();
+         const pendingPlanToApply = this.getPendingPlanToApply(existing, now);
+         if (!pendingPlanToApply) {
+            throw SubscriptionError.validation(subMsg.no_pending_change);
+         }
+         if (existing.pendingPlanChangeType !== PlanChangeType.DOWNGRADE) {
+            throw SubscriptionError.validation(subMsg.invalid_plan_change);
+         }
+
+         const updated = await runWrite(this.prisma, (tx) =>
+            tx.userSubscription.update({
+               where: { id: subscriptionId },
+               data: this.buildPendingPlanSwapUpdate(pendingPlanToApply),
+            }),
+         );
+
+         this.emitPendingPlanApplied(subscriptionId, existing.userId, pendingPlanToApply.id);
+         return toUserSubscriptionDto(updated);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'applyPendingDowngrade' }, subMsg.plan_change_failed);
+      }
+   }
+
+   async applyDuePendingDowngrades(now: Date = new Date()): Promise<ApplyDuePendingDowngradesResult> {
+      const dueSubs = await this.prisma.userSubscription.findMany({
+         where: {
+            pendingPlanChangeType: PlanChangeType.DOWNGRADE,
+            pendingPlanChangeAt: { lte: now },
+            pendingPlanId: { not: null },
+            status: { in: CHANGEABLE_STATUSES },
+         },
+         include: subscriptionInclude,
+      });
+
+      let processed = 0;
+      let failed = 0;
+      const errors: ApplyDuePendingDowngradesResult['errors'] = [];
+
+      for (const sub of dueSubs) {
+         try {
+            if (sub.autoRenew && !sub.cancelAtPeriodEnd) {
+               await this.renewSubscription(sub.id);
+            } else {
+               await this.applyPendingDowngrade(sub.id);
+            }
+            processed++;
+         } catch (error) {
+            failed++;
+            const message = error instanceof Error ? error.message : String(error);
+            errors.push({ subscriptionId: sub.id, message });
+            appLogger.error(
+               { err: error, subscriptionId: sub.id, userId: sub.userId },
+               'Failed to apply due pending downgrade',
+            );
+         }
+      }
+
+      return { processed, failed, errors };
+   }
+
+   async expireDueCanceledSubscriptions(now: Date = new Date()): Promise<SubscriptionJobBatchResult> {
+      const dueSubs = await this.prisma.userSubscription.findMany({
+         where: {
+            cancelAtPeriodEnd: true,
+            currentPeriodEnd: { lte: now },
+            status: { in: CHANGEABLE_STATUSES },
+         },
+      });
+
+      let processed = 0;
+      let failed = 0;
+      const errors: SubscriptionJobBatchResult['errors'] = [];
+
+      for (const sub of dueSubs) {
+         try {
+            const updated = await runWrite(this.prisma, (tx) =>
+               tx.userSubscription.update({
+                  where: { id: sub.id },
+                  data: {
+                     status: SubscriptionStatus.EXPIRED,
+                     endDate: now,
+                     autoRenew: false,
+                  },
+               }),
+            );
+            emitCacheInvalidation('user-subscription', 'updated', sub.id, { userId: sub.userId });
+            emitSubscriptionCatalogInvalidation({
+               userId: sub.userId,
+               subscriptionId: sub.id,
+               planId: updated.planId,
+               action: 'updated',
+            });
+            processed++;
+         } catch (error) {
+            failed++;
+            const message = error instanceof Error ? error.message : String(error);
+            errors.push({ subscriptionId: sub.id, message });
+            appLogger.error(
+               { err: error, subscriptionId: sub.id, userId: sub.userId },
+               'Failed to expire canceled subscription at period end',
+            );
+         }
+      }
+
+      return { processed, failed, errors };
+   }
+
+   async applyDueSubscriptionRenewals(now: Date = new Date()): Promise<SubscriptionJobBatchResult> {
+      const dueSubs = await this.prisma.userSubscription.findMany({
+         where: {
+            autoRenew: true,
+            cancelAtPeriodEnd: false,
+            currentPeriodEnd: { lte: now },
+            status: { in: CHANGEABLE_STATUSES },
+            plan: { billingInterval: { not: BillingInterval.LIFETIME } },
+            NOT: {
+               AND: [
+                  { pendingPlanChangeType: PlanChangeType.DOWNGRADE },
+                  { pendingPlanId: { not: null } },
+                  { pendingPlanChangeAt: { lte: now } },
+               ],
+            },
+         },
+         include: subscriptionInclude,
+      });
+
+      let processed = 0;
+      let failed = 0;
+      const errors: SubscriptionJobBatchResult['errors'] = [];
+
+      for (const sub of dueSubs) {
+         try {
+            await this.renewSubscription(sub.id);
+            processed++;
+         } catch (error) {
+            failed++;
+            const message = error instanceof Error ? error.message : String(error);
+            errors.push({ subscriptionId: sub.id, message });
+            appLogger.error(
+               { err: error, subscriptionId: sub.id, userId: sub.userId },
+               'Failed to renew subscription at period end',
+            );
+         }
+      }
+
+      return { processed, failed, errors };
+   }
+
    async renewSubscription(id: string): Promise<UserSubscriptionDto> {
       try {
          const existing = await this.prisma.userSubscription.findUnique({
@@ -492,10 +676,7 @@ export class UserSubscriptionService {
             pastDueRetryCount: 0,
          };
          if (pendingPlanToApply) {
-            renewUpdateData.plan = { connect: { id: pendingPlanToApply.id } };
-            renewUpdateData.pendingPlan = { disconnect: true };
-            renewUpdateData.pendingPlanChangeAt = null;
-            renewUpdateData.pendingPlanChangeType = null;
+            Object.assign(renewUpdateData, this.buildPendingPlanSwapUpdate(pendingPlanToApply));
          }
 
          const updated = await runInTransaction(this.prisma, async (tx) => {
@@ -522,14 +703,10 @@ export class UserSubscriptionService {
             return sub;
          });
 
-         emitCacheInvalidation('user-subscription', 'updated', id, { userId: existing.userId });
          if (pendingPlanToApply) {
-            emitSubscriptionCatalogInvalidation({
-               userId: existing.userId,
-               subscriptionId: id,
-               planId: pendingPlanToApply.id,
-               action: 'updated',
-            });
+            this.emitPendingPlanApplied(id, existing.userId, pendingPlanToApply.id);
+         } else {
+            emitCacheInvalidation('user-subscription', 'updated', id, { userId: existing.userId });
          }
          return toUserSubscriptionDto(updated);
       } catch (error) {

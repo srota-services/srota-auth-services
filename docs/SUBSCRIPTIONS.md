@@ -66,6 +66,35 @@ Plan `features.maxDevices` and `features.deviceChangesPerMonth` are enforced at 
 - **Renewal** (`POST /:id/renew`): if a pending downgrade is due, `planId` switches first; then the period advances and a **full** `RENEWAL_CHARGE` is recorded for the active plan price.
 - **Cancel scheduled downgrade**: `DELETE /auth/subscriptions/:id/pending-change`.
 
+### Scheduled subscription jobs
+
+Three background jobs run daily (UTC). Each uses a Redis lock so only one auth-service instance runs it when multiple replicas are deployed. Disable all with `SUBSCRIPTION_JOBS_ENABLED=false` (defaults to off in `NODE_ENV=test`).
+
+| Time (UTC) | Job | Cron (default) | Action |
+|------------|-----|------------------|--------|
+| 12:00 AM | Renewal | `0 0 * * *` (`SUBSCRIPTION_RENEWAL_CRON`) | Renew `autoRenew` subscriptions whose period has ended (excluding those with a due pending downgrade) |
+| 12:01 AM | Downgrade | `1 0 * * *` (`SUBSCRIPTION_DOWNGRADE_CRON`) | Apply scheduled downgrades whose `pendingPlanChangeAt` has passed |
+| 12:02 AM | Expiration | `2 0 * * *` (`SUBSCRIPTION_EXPIRATION_CRON`) | Expire subscriptions with `cancelAtPeriodEnd=true` whose period has ended (`status` → `EXPIRED`) |
+
+**Renewal job details**
+
+- `autoRenew=true`, `cancelAtPeriodEnd=false`, period ended, not lifetime, no due pending downgrade → `renewSubscription` (`RENEWAL_CHARGE`)
+- Redis lock: `subscription-renewal-job`
+
+**Downgrade job details**
+
+| Subscription state | Job behavior |
+|--------------------|--------------|
+| `autoRenew === true` and `cancelAtPeriodEnd === false` | Applies downgrade **and** renews the period (`RENEWAL_CHARGE` on the new plan) — same as `POST /:id/renew` |
+| Otherwise | Applies plan swap only (clears pending fields; no renewal charge) |
+
+- Redis lock: `subscription-downgrade-job`
+
+**Expiration job details**
+
+- Subscriptions with `cancelAtPeriodEnd=true` and `currentPeriodEnd <= now` → `EXPIRED`, `endDate` set, cache invalidated
+- Redis lock: `subscription-expiration-job`
+
 Validation: target plan must be active, same `billingInterval` and `currency` as the current plan, and a different tier. Lifetime plans cannot change. During `TRIALING`, upgrades apply immediately with `prorationAmount: 0`.
 
 Proration formula: `max(0, (newPrice - oldPrice) * remainingPeriodRatio)` where `remainingPeriodRatio` is the fraction of time left in `[currentPeriodStart, currentPeriodEnd]`.

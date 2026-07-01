@@ -27,6 +27,9 @@ import { requireHealthSupportAuth } from './middleware/healthSupportAuth';
 import { appLogger } from './utils/logger';
 import { setupSwagger } from './config/swagger';
 import { ChapterGatingConsumerWorkerFactory } from './workers/ChapterGatingConsumerWorker';
+import { SubscriptionDowngradeJobWorkerFactory } from './workers/SubscriptionDowngradeJobWorker';
+import { SubscriptionRenewalJobWorkerFactory } from './workers/SubscriptionRenewalJobWorker';
+import { SubscriptionExpirationJobWorkerFactory } from './workers/SubscriptionExpirationJobWorker';
 
 /**
  * Create and configure Express application
@@ -171,6 +174,11 @@ export const startServer = async (): Promise<void> => {
 
       await ChapterGatingConsumerWorkerFactory.startWorker();
 
+      const prisma = new PrismaClient();
+      await SubscriptionRenewalJobWorkerFactory.startWorker(prisma);
+      await SubscriptionDowngradeJobWorkerFactory.startWorker(prisma);
+      await SubscriptionExpirationJobWorkerFactory.startWorker(prisma);
+
       // Create Express app
       const app = createApp();
 
@@ -191,6 +199,9 @@ export const startServer = async (): Promise<void> => {
       process.on('SIGTERM', async () => {
          appLogger.info('SIGTERM received, shutting down gracefully');
          await ChapterGatingConsumerWorkerFactory.stopWorker();
+         await SubscriptionRenewalJobWorkerFactory.stopWorker();
+         await SubscriptionDowngradeJobWorkerFactory.stopWorker();
+         await SubscriptionExpirationJobWorkerFactory.stopWorker();
          await rabbitmqService.disconnect();
          await redisService.disconnect();
          process.exit(0);
@@ -199,6 +210,9 @@ export const startServer = async (): Promise<void> => {
       process.on('SIGINT', async () => {
          appLogger.info('SIGINT received, shutting down gracefully');
          await ChapterGatingConsumerWorkerFactory.stopWorker();
+         await SubscriptionRenewalJobWorkerFactory.stopWorker();
+         await SubscriptionDowngradeJobWorkerFactory.stopWorker();
+         await SubscriptionExpirationJobWorkerFactory.stopWorker();
          await rabbitmqService.disconnect();
          await redisService.disconnect();
          process.exit(0);
