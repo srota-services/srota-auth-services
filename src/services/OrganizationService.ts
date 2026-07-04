@@ -96,6 +96,7 @@ export class OrganizationService {
                   preferredGenre,
                   websiteUrl,
                   teamSize,
+                  discoverable: data.discoverable ?? false,
                },
             });
 
@@ -125,10 +126,20 @@ export class OrganizationService {
                }),
             );
             emitCacheInvalidation('organization', 'created', organization.id);
+            try {
+               await rabbitmqService.publishOrganizationCreated({ organizationId: organization.id });
+            } catch (publishError) {
+               rethrowServiceError(publishError, { operation: 'createOrganization.publishOrganizationCreated' }, msg.create_failed);
+            }
             return fileUrlService.resolveOrganizationMedia(toOrganizationDto(updated));
          }
 
          emitCacheInvalidation('organization', 'created', organization.id);
+         try {
+            await rabbitmqService.publishOrganizationCreated({ organizationId: organization.id });
+         } catch (publishError) {
+            rethrowServiceError(publishError, { operation: 'createOrganization.publishOrganizationCreated' }, msg.create_failed);
+         }
          return fileUrlService.resolveOrganizationMedia(toOrganizationDto(organization));
       } catch (error) {
          rethrowServiceError(error, { operation: 'createOrganization' }, msg.create_failed);
@@ -248,6 +259,10 @@ export class OrganizationService {
 
       if (data.teamSize !== undefined) {
          updates.teamSize = this.normalizeTeamSize(data.teamSize);
+      }
+
+      if (data.discoverable !== undefined) {
+         updates.discoverable = data.discoverable;
       }
 
       if (Object.keys(updates).length === 0 && !imageSourcePath) {

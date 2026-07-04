@@ -77,6 +77,7 @@ const options: swaggerJsdoc.Options = {
                   preferredGenre: { type: 'string', nullable: true, example: 'Fiction' },
                   websiteUrl: { type: 'string', nullable: true, example: 'https://acme.example.com' },
                   teamSize: { type: 'string', nullable: true, enum: ['1-10', '11-50', '51-200', '200+'] },
+                  discoverable: { type: 'boolean', default: false },
                   memberCount: { type: 'integer', example: 12 },
                   createdAt: { type: 'string', format: 'date-time' },
                   updatedAt: { type: 'string', format: 'date-time' },

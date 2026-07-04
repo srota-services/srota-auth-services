@@ -9,6 +9,7 @@ import authRoutes from './routes/auth';
 import subscriptionPlanRoutes from './routes/subscriptionPlan';
 import userSubscriptionRoutes from './routes/userSubscription';
 import { createOrganizationRoutes } from './routes/organizationRoutes';
+import { OrganizationController } from './controllers/OrganizationController';
 import { createAuthorRoutes } from './routes/authorRoutes';
 import { createCatalogRoutes } from './routes/catalogRoutes';
 import { createDomainEventsRoutes } from './routes/domainEventsRoutes';
@@ -82,6 +83,11 @@ export const createApp = (): express.Application => {
    app.use('/auth/subscription-plans', subscriptionPlanRoutes);
    app.use('/auth/subscriptions', userSubscriptionRoutes);
    app.use('/auth/organizations', authenticateToken, createOrganizationRoutes(prisma));
+   app.get(
+      '/auth/users/me/organization-memberships',
+      authenticateToken,
+      new OrganizationController(prisma).listMyOrganizationMemberships,
+   );
    app.use('/auth/authors', authenticateToken, createAuthorRoutes(prisma));
    app.use('/auth/catalog', authenticateToken, createCatalogRoutes(prisma));
    app.use('/auth/events', createDomainEventsRoutes());

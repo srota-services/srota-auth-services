@@ -261,6 +261,43 @@ export class RabbitMQService {
    }
 
    /**
+    * Publish organization created event
+    */
+   async publishOrganizationCreated(data: { organizationId: string }): Promise<void> {
+      if (!this.isServiceConnected()) {
+         throw new Error('RabbitMQ service is not connected');
+      }
+
+      try {
+         const message = JSON.stringify({ organizationId: data.organizationId });
+         const routingKey = 'organization.created';
+
+         const published = this.channel!.publish(
+            config.RABBITMQ_ORGANIZATIONS_EXCHANGE,
+            routingKey,
+            Buffer.from(message),
+            {
+               persistent: true,
+               timestamp: Date.now(),
+            }
+         );
+
+         if (!published) {
+            throw new Error('Failed to publish message to RabbitMQ');
+         }
+
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.info({ organizationId: data.organizationId, routingKey }, 'Published organization.created event');
+         }
+      } catch (error) {
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.error({ err: error, organizationId: data.organizationId }, 'Error publishing organization created event');
+         }
+         throw error;
+      }
+   }
+
+   /**
     * Publish organization deleted event
     */
    async publishOrganizationDeleted(data: { organizationId: string }): Promise<void> {
