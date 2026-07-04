@@ -18,6 +18,7 @@ export interface OrganizationDto {
    preferredGenre?: string | null;
    websiteUrl?: string | null;
    teamSize?: OrganizationTeamSizeType | null;
+   discoverable?: boolean;
    createdAt: Date;
    updatedAt: Date;
    memberCount?: number | undefined;
@@ -41,6 +42,7 @@ export interface CreateOrganizationDto {
    preferredGenre?: string | null;
    websiteUrl?: string | null;
    teamSize?: OrganizationTeamSizeType | null;
+   discoverable?: boolean;
 }
 
 export interface UpdateOrganizationDto {
@@ -50,6 +52,7 @@ export interface UpdateOrganizationDto {
    preferredGenre?: string | null;
    websiteUrl?: string | null;
    teamSize?: OrganizationTeamSizeType | null;
+   discoverable?: boolean;
 }
 
 export interface AddOrganizationMemberDto {
@@ -110,6 +113,7 @@ export function toOrganizationDto(organization: OrganizationRecord): Organizatio
       preferredGenre: organization.preferredGenre ?? null,
       websiteUrl: organization.websiteUrl ?? null,
       teamSize: teamSizeToApi(organization.teamSize),
+      discoverable: organization.discoverable,
       createdAt: organization.createdAt,
       updatedAt: organization.updatedAt,
       memberCount: organization._count?.members,

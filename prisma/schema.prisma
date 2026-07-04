@@ -343,6 +343,7 @@ model Organization {
    preferredGenre String?
    websiteUrl     String?
    teamSize       OrganizationTeamSize?
+   discoverable   Boolean               @default(false)
 
    createdAt DateTime @default(now())
    updatedAt DateTime @updatedAt

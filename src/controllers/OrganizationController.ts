@@ -144,6 +144,22 @@ export class OrganizationController {
       }
    };
 
+   listMyOrganizationMemberships = async (req: Request, res: Response): Promise<void> => {
+      try {
+         const userId = getUserId(req);
+         const memberships = await this.organizationService.getOrganizationsForUser(userId);
+         res.status(200).json({
+            message: domainMessages.success.organizations.retrieved,
+            memberships: memberships.map((membership) => ({
+               organizationId: membership.organizationId,
+               role: membership.role,
+            })),
+         });
+      } catch (error) {
+         handleDomainError(res, error);
+      }
+   };
+
    listAllOrganizations = async (req: Request, res: Response): Promise<void> => {
       try {
          const page = req.query['page'] ? parseInt(req.query['page'] as string, 10) : 1;

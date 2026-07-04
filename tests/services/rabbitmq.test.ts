@@ -248,6 +248,23 @@ describe('RabbitMQService', () => {
          );
       });
 
+      test('should publish organization created event', async () => {
+         const data = { organizationId: 'org-123' };
+         mockChannel.publish.mockReturnValueOnce(true);
+
+         await rabbitmqService.publishOrganizationCreated(data);
+
+         expect(mockChannel.publish).toHaveBeenCalledWith(
+            config.RABBITMQ_ORGANIZATIONS_EXCHANGE,
+            'organization.created',
+            Buffer.from(JSON.stringify(data)),
+            expect.objectContaining({
+               persistent: true,
+               timestamp: expect.any(Number),
+            })
+         );
+      });
+
       test('should publish organization deleted event', async () => {
          const data = { organizationId: 'org-123' };
          mockChannel.publish.mockReturnValueOnce(true);
