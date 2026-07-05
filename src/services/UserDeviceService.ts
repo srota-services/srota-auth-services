@@ -19,6 +19,7 @@ import {
 } from '../utils/deviceLimits';
 import { otpService } from './otp';
 import { appLogger } from '../utils/logger';
+import { runWrite, runInTransaction } from '../utils/prismaTransaction';
 
 export const DEVICE_REMOVAL_OTP_GENERIC_MESSAGE =
    'If the account and device are eligible, an OTP has been sent to your email.';
@@ -106,16 +107,18 @@ export class UserDeviceService {
       });
 
       if (existing) {
-         return this.prisma.userDevice.update({
-            where: { id: existing.id },
-            data: {
-               lastSeenAt: new Date(),
-               ...(device.deviceName !== undefined ? { deviceName: device.deviceName } : {}),
-               ...(device.platform !== undefined ? { platform: device.platform } : {}),
-               ...(meta?.userAgent !== undefined ? { userAgent: meta.userAgent } : {}),
-               ...(meta?.ipAddress !== undefined ? { ipAddress: meta.ipAddress } : {}),
-            },
-         });
+         return runWrite(this.prisma, (tx) =>
+            tx.userDevice.update({
+               where: { id: existing.id },
+               data: {
+                  lastSeenAt: new Date(),
+                  ...(device.deviceName !== undefined ? { deviceName: device.deviceName } : {}),
+                  ...(device.platform !== undefined ? { platform: device.platform } : {}),
+                  ...(meta?.userAgent !== undefined ? { userAgent: meta.userAgent } : {}),
+                  ...(meta?.ipAddress !== undefined ? { ipAddress: meta.ipAddress } : {}),
+               },
+            }),
+         );
       }
 
       if (isDeviceLimitEnforcedRole(role)) {
@@ -132,16 +135,18 @@ export class UserDeviceService {
          }
       }
 
-      return this.prisma.userDevice.create({
-         data: {
-            userId,
-            deviceId: device.deviceId,
-            deviceName: device.deviceName ?? null,
-            platform: device.platform ?? null,
-            userAgent: meta?.userAgent ?? null,
-            ipAddress: meta?.ipAddress ?? null,
-         },
-      });
+      return runWrite(this.prisma, (tx) =>
+         tx.userDevice.create({
+            data: {
+               userId,
+               deviceId: device.deviceId,
+               deviceName: device.deviceName ?? null,
+               platform: device.platform ?? null,
+               userAgent: meta?.userAgent ?? null,
+               ipAddress: meta?.ipAddress ?? null,
+            },
+         }),
+      );
    }
 
    async assertDeviceExistsForRefresh(userDeviceId: string | null): Promise<void> {
@@ -161,10 +166,12 @@ export class UserDeviceService {
          );
       }
 
-      await this.prisma.userDevice.update({
-         where: { id: userDeviceId },
-         data: { lastSeenAt: new Date() },
-      });
+      await runWrite(this.prisma, (tx) =>
+         tx.userDevice.update({
+            where: { id: userDeviceId },
+            data: { lastSeenAt: new Date() },
+         }),
+      );
    }
 
    async removeDevice(userId: string, deviceRowId: string, role: Role): Promise<void> {
@@ -176,7 +183,7 @@ export class UserDeviceService {
 
       await this.assertUserCanRemoveDevice(userId, role);
 
-      await this.prisma.$transaction(async (tx) => {
+      await runInTransaction(this.prisma, async (tx) => {
          await tx.refreshToken.updateMany({
             where: { userDeviceId: device.id, isRevoked: false },
             data: { isRevoked: true },
@@ -337,10 +344,12 @@ export class UserDeviceService {
    }
 
    async revokeRefreshTokensForDevice(userDeviceId: string): Promise<void> {
-      await this.prisma.refreshToken.updateMany({
-         where: { userDeviceId, isRevoked: false },
-         data: { isRevoked: true },
-      });
+      await runWrite(this.prisma, (tx) =>
+         tx.refreshToken.updateMany({
+            where: { userDeviceId, isRevoked: false },
+            data: { isRevoked: true },
+         }),
+      );
    }
 
    async getRemainingDeviceChanges(userId: string): Promise<number> {

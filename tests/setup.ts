@@ -34,7 +34,7 @@ process.env['RATE_LIMIT_WINDOW_MS'] = '900000';
 process.env['RATE_LIMIT_MAX_REQUESTS'] = '100';
 process.env['EMAIL_FROM'] = 'test@example.com';
 process.env['EMAIL_SERVICE_URL'] = '';
-process.env['GOOGLE_CLIENT_ID'] = '';
+process.env['GOOGLE_CLIENT_ID'] = 'test-google-client-id';
 process.env['ARGON2_MEMORY'] = '65536';
 process.env['ARGON2_ITERATIONS'] = '3';
 process.env['ARGON2_PARALLELISM'] = '4';
@@ -59,6 +59,7 @@ process.env['NOMINATIM_USER_AGENT'] = 'SrotaAuthTest/1.0';
 
 // Mock Prisma client for tests
 jest.mock('@prisma/client', () => {
+   const actual = jest.requireActual('@prisma/client');
    class MockDecimal {
       constructor(private value: string | number) { }
       toString(): string {
@@ -66,37 +67,66 @@ jest.mock('@prisma/client', () => {
       }
    }
    return {
-      Prisma: { Decimal: MockDecimal, JsonNull: null },
-      PrismaClient: jest.fn().mockImplementation(() => ({
-         user: {
-            findUnique: jest.fn(),
-            create: jest.fn(),
-            update: jest.fn(),
-            findMany: jest.fn(),
-         },
-         refreshToken: {
-            findUnique: jest.fn(),
-            create: jest.fn(),
-            update: jest.fn(),
-            updateMany: jest.fn(),
-         },
-         emailVerificationToken: {
-            findUnique: jest.fn(),
-            create: jest.fn(),
-            update: jest.fn(),
-         },
-         passwordResetToken: {
-            findUnique: jest.fn(),
-            create: jest.fn(),
-            update: jest.fn(),
-         },
-      })),
+      ...actual,
+      Prisma: {
+         ...actual.Prisma,
+         Decimal: MockDecimal,
+         JsonNull: null,
+      },
+      PrismaClient: jest.fn().mockImplementation(() => {
+         const client = {
+            user: {
+               findUnique: jest.fn(),
+               create: jest.fn(),
+               update: jest.fn(),
+               findMany: jest.fn(),
+            },
+            refreshToken: {
+               findUnique: jest.fn(),
+               create: jest.fn(),
+               update: jest.fn(),
+               updateMany: jest.fn(),
+            },
+            emailVerificationToken: {
+               findUnique: jest.fn(),
+               create: jest.fn(),
+               update: jest.fn(),
+            },
+            passwordResetToken: {
+               findUnique: jest.fn(),
+               create: jest.fn(),
+               update: jest.fn(),
+            },
+            userDevice: {
+               findFirst: jest.fn(),
+               findUnique: jest.fn(),
+               create: jest.fn(),
+               update: jest.fn(),
+            },
+            otpToken: {
+               findFirst: jest.fn(),
+               create: jest.fn(),
+               update: jest.fn(),
+            },
+         };
+         const clientWithTx = client as typeof client & {
+            $transaction: jest.Mock;
+         };
+         clientWithTx.$transaction = jest.fn(async (arg: unknown) => {
+            if (typeof arg === 'function') {
+               return (arg as (tx: typeof client) => Promise<unknown>)(client);
+            }
+            return Promise.all(arg as Promise<unknown>[]);
+         });
+         return clientWithTx;
+      }),
       Role: {
          LISTENER: 'LISTENER',
          GLOBAL_ADMIN: 'GLOBAL_ADMIN',
          ORG_ADMIN: 'ORG_ADMIN',
          ORG_COORDINATOR: 'ORG_COORDINATOR',
          AUTHOR: 'AUTHOR',
+         GUEST: 'GUEST',
       },
       BillingInterval: {
          MONTHLY: 'MONTHLY',
@@ -145,6 +175,40 @@ jest.mock('@prisma/client', () => {
          SIZE_11_50: 'SIZE_11_50',
          SIZE_51_200: 'SIZE_51_200',
          SIZE_200_PLUS: 'SIZE_200_PLUS',
+      },
+      AuthorOrganizationInvitationStatus: {
+         PENDING_CONTACT_CONSENT: 'PENDING_CONTACT_CONSENT',
+         AWAITING_ORG_CONTACT: 'AWAITING_ORG_CONTACT',
+         AWAITING_JOIN_DECISION: 'AWAITING_JOIN_DECISION',
+         DECLINED: 'DECLINED',
+         ACCEPTED: 'ACCEPTED',
+      },
+      AuthorOrganizationCollaborationStatus: {
+         PENDING_ORG_REVIEW: 'PENDING_ORG_REVIEW',
+         NEGOTIATION: 'NEGOTIATION',
+         ACCEPTED: 'ACCEPTED',
+         REJECTED: 'REJECTED',
+         ABORTED: 'ABORTED',
+      },
+      CollaborationActor: {
+         AUTHOR: 'AUTHOR',
+         ORGANIZATION: 'ORGANIZATION',
+      },
+      CollaborationTurn: {
+         AUTHOR: 'AUTHOR',
+         ORGANIZATION: 'ORGANIZATION',
+      },
+      ReputationTierLevel: {
+         TIER_1: 'TIER_1',
+         TIER_2: 'TIER_2',
+         TIER_3: 'TIER_3',
+         TIER_4: 'TIER_4',
+         TIER_5: 'TIER_5',
+      },
+      ReviewerType: {
+         USER: 'USER',
+         AUTHOR: 'AUTHOR',
+         ORGANIZATION: 'ORGANIZATION',
       },
    };
 });

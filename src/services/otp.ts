@@ -2,6 +2,7 @@ import { PrismaClient, OtpPurpose } from '@prisma/client';
 import type { OtpToken } from '@prisma/client';
 import { PasswordUtils } from '../utils/crypto';
 import { emailLogger } from '../utils/logger';
+import { runInTransaction, runWrite } from '../utils/prismaTransaction';
 import { emailService } from './email';
 
 // Prisma 7 reads connection from prisma.config.ts automatically
@@ -58,11 +59,6 @@ export class OTPService {
             throw new Error(`Please wait ${remainingSeconds} seconds before requesting a new OTP`);
          }
 
-         // Invalidate old OTP
-         await prisma.otpToken.update({
-            where: { id: existingOTP.id },
-            data: { invalidatedAt: new Date() },
-         });
       }
 
       // Generate OTP
@@ -78,16 +74,24 @@ export class OTPService {
       // Calculate expiration time (10 minutes from now)
       const expiresAt = new Date(Date.now() + this.OTP_EXPIRY_MINUTES * 60 * 1000);
 
-      // Create OTP token in database
-      const otpToken = await prisma.otpToken.create({
-         data: {
-            codeHash: otpHash,
-            userId,
-            purpose,
-            expiresAt,
-            attempts: 0,
-            isVerified: false,
-         },
+      const otpToken = await runInTransaction(prisma, async (tx) => {
+         if (existingOTP) {
+            await tx.otpToken.update({
+               where: { id: existingOTP.id },
+               data: { invalidatedAt: new Date() },
+            });
+         }
+
+         return tx.otpToken.create({
+            data: {
+               codeHash: otpHash,
+               userId,
+               purpose,
+               expiresAt,
+               attempts: 0,
+               isVerified: false,
+            },
+         });
       });
 
       // Send OTP email (don't fail if email fails)
@@ -142,10 +146,12 @@ export class OTPService {
          const newAttempts = otpToken.attempts + 1;
          const remainingAttempts = this.MAX_ATTEMPTS - newAttempts;
 
-         await prisma.otpToken.update({
-            where: { id: otpToken.id },
-            data: { attempts: newAttempts },
-         });
+         await runWrite(prisma, (tx) =>
+            tx.otpToken.update({
+               where: { id: otpToken.id },
+               data: { attempts: newAttempts },
+            }),
+         );
 
          if (remainingAttempts <= 0) {
             throw new Error('Maximum OTP verification attempts reached. Please request a new OTP.');
@@ -154,11 +160,12 @@ export class OTPService {
          throw new Error(`Invalid OTP. ${remainingAttempts} attempt(s) remaining.`);
       }
 
-      // Mark as verified on success
-      await prisma.otpToken.update({
-         where: { id: otpToken.id },
-         data: { isVerified: true },
-      });
+      await runWrite(prisma, (tx) =>
+         tx.otpToken.update({
+            where: { id: otpToken.id },
+            data: { isVerified: true },
+         }),
+      );
 
       return true;
    }
@@ -168,10 +175,12 @@ export class OTPService {
     * @param otpId - OTP token ID
     */
    async invalidateOTP(otpId: string): Promise<void> {
-      await prisma.otpToken.update({
-         where: { id: otpId },
-         data: { invalidatedAt: new Date() },
-      });
+      await runWrite(prisma, (tx) =>
+         tx.otpToken.update({
+            where: { id: otpId },
+            data: { invalidatedAt: new Date() },
+         }),
+      );
    }
 
    /**

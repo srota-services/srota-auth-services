@@ -9,6 +9,11 @@ export class RabbitMQService {
    private connection: any = null;
    private channel: any = null;
    private isConnected: boolean = false;
+   private chapterGatingConsumerTag: string | null = null;
+
+   private static readonly CHAPTERS_EXCHANGE = 'chapters';
+   private static readonly CHAPTER_GATING_QUEUE = 'auth.chapters.gating.changed';
+   private static readonly CHAPTER_GATING_ROUTING_KEY = 'chapter.gating.changed';
 
    constructor() {
       // Constructor is empty - initialization happens in connect()
@@ -56,6 +61,8 @@ export class RabbitMQService {
          if (config.NODE_ENV !== 'test') {
             rabbitmqLogger.info({ exchange: config.RABBITMQ_ORGANIZATIONS_EXCHANGE }, 'Organizations exchange asserted');
          }
+
+         await this.setupChapterGatingConsumerQueue();
 
          this.isConnected = true;
 
@@ -254,6 +261,43 @@ export class RabbitMQService {
    }
 
    /**
+    * Publish organization created event
+    */
+   async publishOrganizationCreated(data: { organizationId: string }): Promise<void> {
+      if (!this.isServiceConnected()) {
+         throw new Error('RabbitMQ service is not connected');
+      }
+
+      try {
+         const message = JSON.stringify({ organizationId: data.organizationId });
+         const routingKey = 'organization.created';
+
+         const published = this.channel!.publish(
+            config.RABBITMQ_ORGANIZATIONS_EXCHANGE,
+            routingKey,
+            Buffer.from(message),
+            {
+               persistent: true,
+               timestamp: Date.now(),
+            }
+         );
+
+         if (!published) {
+            throw new Error('Failed to publish message to RabbitMQ');
+         }
+
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.info({ organizationId: data.organizationId, routingKey }, 'Published organization.created event');
+         }
+      } catch (error) {
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.error({ err: error, organizationId: data.organizationId }, 'Error publishing organization created event');
+         }
+         throw error;
+      }
+   }
+
+   /**
     * Publish organization deleted event
     */
    async publishOrganizationDeleted(data: { organizationId: string }): Promise<void> {
@@ -285,6 +329,108 @@ export class RabbitMQService {
       } catch (error) {
          if (config.NODE_ENV !== 'test') {
             rabbitmqLogger.error({ err: error, organizationId: data.organizationId }, 'Error publishing organization deleted event');
+         }
+         throw error;
+      }
+   }
+
+   /**
+    * Publish subscription changed event (effective tier/access change)
+    */
+   async publishSubscriptionChanged(data: {
+      userId: string;
+      subscriptionId: string;
+      planId: string;
+      action: string;
+   }): Promise<void> {
+      if (!this.isServiceConnected()) {
+         throw new Error('RabbitMQ service is not connected');
+      }
+
+      try {
+         const message = JSON.stringify({
+            userId: data.userId,
+            subscriptionId: data.subscriptionId,
+            planId: data.planId,
+            action: data.action,
+         });
+         const routingKey = 'user.subscription.changed';
+
+         const published = this.channel!.publish(
+            config.RABBITMQ_EXCHANGE,
+            routingKey,
+            Buffer.from(message),
+            {
+               persistent: true,
+               timestamp: Date.now(),
+            }
+         );
+
+         if (!published) {
+            throw new Error('Failed to publish message to RabbitMQ');
+         }
+
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.info(
+               { userId: data.userId, subscriptionId: data.subscriptionId, routingKey },
+               'Published user.subscription.changed event',
+            );
+         }
+      } catch (error) {
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.error(
+               { err: error, userId: data.userId, subscriptionId: data.subscriptionId },
+               'Error publishing user.subscription.changed event',
+            );
+         }
+         throw error;
+      }
+   }
+
+   /**
+    * Publish subscription gating changed event (plan tier definition change)
+    */
+   async publishSubscriptionGatingChanged(data: {
+      action: string;
+      planId: string;
+   }): Promise<void> {
+      if (!this.isServiceConnected()) {
+         throw new Error('RabbitMQ service is not connected');
+      }
+
+      try {
+         const message = JSON.stringify({
+            action: data.action,
+            planId: data.planId,
+         });
+         const routingKey = 'subscription.gating.changed';
+
+         const published = this.channel!.publish(
+            config.RABBITMQ_EXCHANGE,
+            routingKey,
+            Buffer.from(message),
+            {
+               persistent: true,
+               timestamp: Date.now(),
+            }
+         );
+
+         if (!published) {
+            throw new Error('Failed to publish message to RabbitMQ');
+         }
+
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.info(
+               { planId: data.planId, routingKey },
+               'Published subscription.gating.changed event',
+            );
+         }
+      } catch (error) {
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.error(
+               { err: error, planId: data.planId },
+               'Error publishing subscription.gating.changed event',
+            );
          }
          throw error;
       }
@@ -329,6 +475,90 @@ export class RabbitMQService {
             rabbitmqLogger.error({ err: error, userId: data.userId }, 'Error publishing user deleted event');
          }
          throw error;
+      }
+   }
+
+   /**
+    * Assert chapters exchange and queue for chapter gating events from app-service
+    */
+   private async setupChapterGatingConsumerQueue(): Promise<void> {
+      await this.channel.assertExchange(RabbitMQService.CHAPTERS_EXCHANGE, 'topic', {
+         durable: true,
+      });
+
+      await this.channel.assertQueue(RabbitMQService.CHAPTER_GATING_QUEUE, {
+         durable: true,
+      });
+
+      await this.channel.bindQueue(
+         RabbitMQService.CHAPTER_GATING_QUEUE,
+         RabbitMQService.CHAPTERS_EXCHANGE,
+         RabbitMQService.CHAPTER_GATING_ROUTING_KEY,
+      );
+   }
+
+   /**
+    * Consume chapter gating changed messages from app-service
+    */
+   async consumeChapterGatingChangedMessages(
+      onMessage: (message: {
+         chapterId: string;
+         audiobookId: string;
+         action: 'created' | 'updated' | 'deleted';
+      }) => Promise<void>,
+   ): Promise<void> {
+      if (!this.isServiceConnected()) {
+         throw new Error('RabbitMQ service is not connected');
+      }
+
+      await this.channel.prefetch(1);
+
+      const consumeResult = await this.channel.consume(
+         RabbitMQService.CHAPTER_GATING_QUEUE,
+         async (msg: any) => {
+            if (!msg) {
+               return;
+            }
+
+            try {
+               const messageContent = JSON.parse(msg.content.toString());
+               await onMessage(messageContent);
+               this.channel!.ack(msg);
+            } catch (error) {
+               if (config.NODE_ENV !== 'test') {
+                  rabbitmqLogger.error({ err: error }, 'Error processing chapter gating changed message');
+               }
+               this.channel!.ack(msg);
+            }
+         },
+         { noAck: false },
+      );
+
+      this.chapterGatingConsumerTag = consumeResult.consumerTag;
+
+      if (config.NODE_ENV !== 'test') {
+         rabbitmqLogger.info(
+            { queue: RabbitMQService.CHAPTER_GATING_QUEUE },
+            'Started consuming chapter gating changed messages',
+         );
+      }
+   }
+
+   /**
+    * Stop consuming chapter gating changed messages
+    */
+   async stopConsumingChapterGatingChangedMessages(): Promise<void> {
+      if (!this.channel || !this.chapterGatingConsumerTag) {
+         return;
+      }
+
+      try {
+         await this.channel.cancel(this.chapterGatingConsumerTag);
+         this.chapterGatingConsumerTag = null;
+      } catch (error) {
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.error({ err: error }, 'Error stopping chapter gating changed message consumer');
+         }
       }
    }
 

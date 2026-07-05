@@ -333,6 +333,59 @@
 
 /**
  * @swagger
+ * /auth/guest:
+ *   post:
+ *     summary: Create or resume anonymous guest session
+ *     description: |
+ *       Creates a new guest user or resumes an existing guest session for the same device.
+ *       Returns JWT access and refresh tokens without requiring signup or login.
+ *       Guest users can browse the catalog via GET (active content only).
+ *       POST, PUT, PATCH, and DELETE return 403 except PUT /auth/user/profile
+ *       when only `location` is being updated; streaming is not available for guests.
+ *     tags: [Auth]
+ *     parameters:
+ *       - in: header
+ *         name: X-CSRF-Token
+ *         schema: { type: string }
+ *         description: CSRF token from GET /auth/csrf-token (required for browser cookie flow)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/GuestAuthRequest'
+ *           examples:
+ *             browser:
+ *               summary: Browser guest session
+ *               value:
+ *                 clientType: "browser"
+ *                 device:
+ *                   deviceId: "browser-abc123"
+ *                   deviceName: "Chrome on Windows"
+ *                   platform: "web"
+ *             mobile:
+ *               summary: Mobile guest session
+ *               value:
+ *                 clientType: "mobile"
+ *                 device:
+ *                   deviceId: "mobile-device-001"
+ *                   deviceName: "iPhone 15"
+ *                   platform: "ios"
+ *     responses:
+ *       200:
+ *         description: Guest session created or resumed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: Invalid device context
+ *       429:
+ *         description: Too many guest session requests
+ */
+
+/**
+ * @swagger
  * /auth/refresh:
  *   post:
  *     summary: Refresh access token
@@ -440,6 +493,106 @@
  *               role: "ORG_ADMIN"
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
+ */
+
+/**
+ * @swagger
+ * /auth/user/profile:
+ *   get:
+ *     summary: Get current user profile
+ *     description: Returns unified profile fields (demographics, username, avatar, preferences) on the auth User model.
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user:
+ *                   $ref: '#/components/schemas/UserProfile'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *   put:
+ *     summary: Update current user profile
+ *     description: |
+ *       Updates demographic fields on the auth User model. Location is resolved from
+ *       latitude/longitude coordinates to a human-readable place name.
+ *
+ *       **Guest users:** only `location` may be updated (including `null` to clear).
+ *       Other profile fields require a registered account.
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateUserProfileRequest'
+ *           examples:
+ *             locationOnly:
+ *               summary: Update location (allowed for guests)
+ *               value:
+ *                 location:
+ *                   latitude: 19.076
+ *                   longitude: 72.8777
+ *             clearLocation:
+ *               summary: Clear stored location
+ *               value:
+ *                 location: null
+ *     responses:
+ *       200:
+ *         description: Profile updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Profile updated successfully
+ *                 user:
+ *                   $ref: '#/components/schemas/UserProfile'
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         description: Guest attempted to update non-location profile fields
+ */
+
+/**
+ * @swagger
+ * /auth/users/{userId}/profile:
+ *   get:
+ *     summary: Get public user profile
+ *     description: Returns username and avatar for a user by auth user ID.
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Public profile
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 profile:
+ *                   $ref: '#/components/schemas/PublicUserProfile'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
  */
 
 /**

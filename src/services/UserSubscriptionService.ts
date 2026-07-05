@@ -7,7 +7,9 @@ import {
    BillingEventType,
    SubscriptionPlan,
    UserSubscription,
+   SubscriptionTierLevel,
 } from '@prisma/client';
+import { SUBSCRIPTION_TIER_ORDER } from '../constants/subscriptionTierLevel';
 import {
    UserSubscriptionDto,
    UserSubscriptionWithPlan,
@@ -24,6 +26,11 @@ import { SubscriptionError } from '../types/subscription';
 import { subscriptionMessages } from '../utils/subscriptionMessages';
 import { computeProration } from '../utils/subscriptionProration';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { emitSubscriptionCatalogInvalidation } from './subscriptionCatalogInvalidation';
+import { isGuestRole } from '../constants/authRoles';
+import { runInTransaction, runWrite } from '../utils/prismaTransaction';
+import { rethrowServiceError } from '../utils/serviceError';
+import { appLogger } from '../utils/logger';
 
 const planMsg = subscriptionMessages.error.subscription_plans;
 const subMsg = subscriptionMessages.error.user_subscriptions;
@@ -38,6 +45,14 @@ type SubscriptionWithPlans = UserSubscription & {
    plan: SubscriptionPlan;
    pendingPlan: SubscriptionPlan | null;
 };
+
+export interface ApplyDuePendingDowngradesResult {
+   processed: number;
+   failed: number;
+   errors: Array<{ subscriptionId: string; message: string }>;
+}
+
+export type SubscriptionJobBatchResult = ApplyDuePendingDowngradesResult;
 
 function addMonths(date: Date, months: number): Date {
    const result = new Date(date.getTime());
@@ -73,7 +88,7 @@ function planPriceToDecimal(price: SubscriptionPlan['price']): Prisma.Decimal {
 export class UserSubscriptionService {
    constructor(private prisma: PrismaClient) {}
 
-   async getUserHighestActiveTier(userId: string): Promise<number | null> {
+   async getUserHighestActiveTier(userId: string): Promise<SubscriptionTierLevel | null> {
       const subs = await this.prisma.userSubscription.findMany({
          where: {
             userId,
@@ -82,10 +97,12 @@ export class UserSubscriptionService {
          include: { plan: true },
       });
       if (subs.length === 0) return null;
-      let highest: number | null = null;
+      let highest: SubscriptionTierLevel | null = null;
       for (const sub of subs) {
          const tier = sub.plan.tierLevel;
-         if (highest === null || tier > highest) highest = tier;
+         if (highest === null || SUBSCRIPTION_TIER_ORDER[tier] > SUBSCRIPTION_TIER_ORDER[highest]) {
+            highest = tier;
+         }
       }
       return highest;
    }
@@ -94,6 +111,9 @@ export class UserSubscriptionService {
       try {
          const user = await this.prisma.user.findUnique({ where: { id: data.userId } });
          if (!user) throw SubscriptionError.notFound(subscriptionMessages.error.not_found.user);
+         if (isGuestRole(user.role)) {
+            throw SubscriptionError.forbidden(subMsg.guest_not_allowed);
+         }
          const plan = await this.prisma.subscriptionPlan.findUnique({ where: { id: data.planId } });
          if (!plan) throw SubscriptionError.notFound(planMsg.not_found);
          if (!plan.isActive) throw SubscriptionError.validation(planMsg.inactive);
@@ -112,25 +132,32 @@ export class UserSubscriptionService {
          const currentPeriodStart = startDate;
          const currentPeriodEnd = useTrial ? trialEndsAt! : computePeriodEnd(startDate, plan.billingInterval);
          const status = useTrial ? SubscriptionStatus.TRIALING : SubscriptionStatus.ACTIVE;
-         const created = await this.prisma.userSubscription.create({
-            data: {
-               userId: data.userId,
-               planId: data.planId,
-               status,
-               startDate,
-               currentPeriodStart,
-               currentPeriodEnd,
-               trialEndsAt,
-               autoRenew: data.autoRenew ?? plan.billingInterval !== BillingInterval.LIFETIME,
-               paymentMethod: data.paymentMethod ?? null,
-            },
-            include: subscriptionInclude,
-         });
+         const created = await runWrite(this.prisma, (tx) =>
+            tx.userSubscription.create({
+               data: {
+                  userId: data.userId,
+                  planId: data.planId,
+                  status,
+                  startDate,
+                  currentPeriodStart,
+                  currentPeriodEnd,
+                  trialEndsAt,
+                  autoRenew: data.autoRenew ?? plan.billingInterval !== BillingInterval.LIFETIME,
+                  paymentMethod: data.paymentMethod ?? null,
+               },
+               include: subscriptionInclude,
+            }),
+         );
          emitCacheInvalidation('user-subscription', 'created', created.id, { userId: data.userId });
+         emitSubscriptionCatalogInvalidation({
+            userId: data.userId,
+            subscriptionId: created.id,
+            planId: data.planId,
+            action: 'created',
+         });
          return toUserSubscriptionWithPlan(created);
       } catch (error) {
-         if (error instanceof SubscriptionError) throw error;
-         throw SubscriptionError.internal(subMsg.create_failed);
+         rethrowServiceError(error, { operation: 'createSubscription' }, subMsg.create_failed);
       }
    }
 
@@ -158,8 +185,8 @@ export class UserSubscriptionService {
             }),
          ]);
          return { subscriptions: subscriptions.map(toUserSubscriptionWithPlan), totalCount };
-      } catch {
-         throw SubscriptionError.internal(subMsg.fetch_failed);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getAllSubscriptions' }, subMsg.fetch_failed);
       }
    }
 
@@ -172,8 +199,7 @@ export class UserSubscriptionService {
          if (!sub) throw SubscriptionError.notFound(subMsg.not_found);
          return toUserSubscriptionWithPlan(sub);
       } catch (error) {
-         if (error instanceof SubscriptionError) throw error;
-         throw SubscriptionError.internal(subMsg.fetch_failed);
+         rethrowServiceError(error, { operation: 'getSubscriptionById' }, subMsg.fetch_failed);
       }
    }
 
@@ -190,8 +216,8 @@ export class UserSubscriptionService {
             include: subscriptionInclude,
          });
          return sub ? toUserSubscriptionWithPlan(sub) : null;
-      } catch {
-         throw SubscriptionError.internal(subMsg.fetch_failed);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getActiveSubscriptionForUser' }, subMsg.fetch_failed);
       }
    }
 
@@ -207,12 +233,13 @@ export class UserSubscriptionService {
          if (Object.keys(updateData).length === 0) {
             throw SubscriptionError.validation(subscriptionMessages.error.validation.no_update_fields);
          }
-         const updated = await this.prisma.userSubscription.update({ where: { id }, data: updateData });
+         const updated = await runWrite(this.prisma, (tx) =>
+            tx.userSubscription.update({ where: { id }, data: updateData }),
+         );
          emitCacheInvalidation('user-subscription', 'updated', id, { userId: existing.userId });
          return toUserSubscriptionDto(updated);
       } catch (error) {
-         if (error instanceof SubscriptionError) throw error;
-         throw SubscriptionError.internal(subMsg.update_failed);
+         rethrowServiceError(error, { operation: 'updateSubscription' }, subMsg.update_failed);
       }
    }
 
@@ -234,12 +261,21 @@ export class UserSubscriptionService {
             updateData.status = SubscriptionStatus.CANCELED;
             updateData.endDate = now;
          }
-         const updated = await this.prisma.userSubscription.update({ where: { id }, data: updateData });
+         const updated = await runWrite(this.prisma, (tx) =>
+            tx.userSubscription.update({ where: { id }, data: updateData }),
+         );
          emitCacheInvalidation('user-subscription', 'updated', id, { userId: existing.userId });
+         if (!cancelAtPeriodEnd) {
+            emitSubscriptionCatalogInvalidation({
+               userId: existing.userId,
+               subscriptionId: id,
+               planId: existing.planId,
+               action: 'updated',
+            });
+         }
          return toUserSubscriptionDto(updated);
       } catch (error) {
-         if (error instanceof SubscriptionError) throw error;
-         throw SubscriptionError.internal(subMsg.cancel_failed);
+         rethrowServiceError(error, { operation: 'cancelSubscription' }, subMsg.cancel_failed);
       }
    }
 
@@ -288,7 +324,7 @@ export class UserSubscriptionService {
 
          const now = new Date();
 
-         if (targetPlan.tierLevel > existing.plan.tierLevel) {
+         if (SUBSCRIPTION_TIER_ORDER[targetPlan.tierLevel] > SUBSCRIPTION_TIER_ORDER[existing.plan.tierLevel]) {
             const { prorationAmount, remainingRatio } = computeProration({
                oldPrice: existing.plan.price,
                newPrice: targetPlan.price,
@@ -298,7 +334,7 @@ export class UserSubscriptionService {
                status: existing.status,
             });
 
-            const updated = await this.prisma.$transaction(async (tx) => {
+            const updated = await runInTransaction(this.prisma, async (tx) => {
                const upgradeData: Prisma.UserSubscriptionUpdateInput = {
                   plan: { connect: { id: newPlanId } },
                   pendingPlanChangeAt: null,
@@ -336,6 +372,12 @@ export class UserSubscriptionService {
             emitCacheInvalidation('user-subscription', 'updated', subscriptionId, {
                userId: existing.userId,
             });
+            emitSubscriptionCatalogInvalidation({
+               userId: existing.userId,
+               subscriptionId,
+               planId: newPlanId,
+               action: 'updated',
+            });
             return {
                changeType: PlanChangeType.UPGRADE,
                effectiveAt: now,
@@ -345,7 +387,7 @@ export class UserSubscriptionService {
          }
 
          const effectiveAt = existing.currentPeriodEnd;
-         const updated = await this.prisma.$transaction(async (tx) => {
+         const updated = await runInTransaction(this.prisma, async (tx) => {
             const sub = await tx.userSubscription.update({
                where: { id: subscriptionId },
                data: {
@@ -384,8 +426,7 @@ export class UserSubscriptionService {
             subscription: toUserSubscriptionWithPlan(updated),
          };
       } catch (error) {
-         if (error instanceof SubscriptionError) throw error;
-         throw SubscriptionError.internal(subMsg.plan_change_failed);
+         rethrowServiceError(error, { operation: 'changeSubscriptionPlan' }, subMsg.plan_change_failed);
       }
    }
 
@@ -400,22 +441,23 @@ export class UserSubscriptionService {
             throw SubscriptionError.validation(subMsg.no_pending_change);
          }
 
-         const updated = await this.prisma.userSubscription.update({
-            where: { id: subscriptionId },
-            data: {
-               pendingPlan: { disconnect: true },
-               pendingPlanChangeAt: null,
-               pendingPlanChangeType: null,
-            },
-            include: subscriptionInclude,
-         });
+         const updated = await runWrite(this.prisma, (tx) =>
+            tx.userSubscription.update({
+               where: { id: subscriptionId },
+               data: {
+                  pendingPlan: { disconnect: true },
+                  pendingPlanChangeAt: null,
+                  pendingPlanChangeType: null,
+               },
+               include: subscriptionInclude,
+            }),
+         );
          emitCacheInvalidation('user-subscription', 'updated', subscriptionId, {
             userId: existing.userId,
          });
          return toUserSubscriptionWithPlan(updated);
       } catch (error) {
-         if (error instanceof SubscriptionError) throw error;
-         throw SubscriptionError.internal(subMsg.cancel_pending_failed);
+         rethrowServiceError(error, { operation: 'cancelPendingPlanChange' }, subMsg.cancel_pending_failed);
       }
    }
 
@@ -426,6 +468,181 @@ export class UserSubscriptionService {
       if (!existing.pendingPlanId || !existing.pendingPlanChangeAt || !existing.pendingPlan) return null;
       if (now < existing.pendingPlanChangeAt) return null;
       return existing.pendingPlan;
+   }
+
+   private buildPendingPlanSwapUpdate(pendingPlan: SubscriptionPlan): Prisma.UserSubscriptionUpdateInput {
+      return {
+         plan: { connect: { id: pendingPlan.id } },
+         pendingPlan: { disconnect: true },
+         pendingPlanChangeAt: null,
+         pendingPlanChangeType: null,
+      };
+   }
+
+   private emitPendingPlanApplied(subscriptionId: string, userId: string, planId: string): void {
+      emitCacheInvalidation('user-subscription', 'updated', subscriptionId, { userId });
+      emitSubscriptionCatalogInvalidation({
+         userId,
+         subscriptionId,
+         planId,
+         action: 'updated',
+      });
+   }
+
+   async applyPendingDowngrade(subscriptionId: string): Promise<UserSubscriptionDto> {
+      try {
+         const existing = await this.prisma.userSubscription.findUnique({
+            where: { id: subscriptionId },
+            include: subscriptionInclude,
+         });
+         if (!existing) throw SubscriptionError.notFound(subMsg.not_found);
+
+         const now = new Date();
+         const pendingPlanToApply = this.getPendingPlanToApply(existing, now);
+         if (!pendingPlanToApply) {
+            throw SubscriptionError.validation(subMsg.no_pending_change);
+         }
+         if (existing.pendingPlanChangeType !== PlanChangeType.DOWNGRADE) {
+            throw SubscriptionError.validation(subMsg.invalid_plan_change);
+         }
+
+         const updated = await runWrite(this.prisma, (tx) =>
+            tx.userSubscription.update({
+               where: { id: subscriptionId },
+               data: this.buildPendingPlanSwapUpdate(pendingPlanToApply),
+            }),
+         );
+
+         this.emitPendingPlanApplied(subscriptionId, existing.userId, pendingPlanToApply.id);
+         return toUserSubscriptionDto(updated);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'applyPendingDowngrade' }, subMsg.plan_change_failed);
+      }
+   }
+
+   async applyDuePendingDowngrades(now: Date = new Date()): Promise<ApplyDuePendingDowngradesResult> {
+      const dueSubs = await this.prisma.userSubscription.findMany({
+         where: {
+            pendingPlanChangeType: PlanChangeType.DOWNGRADE,
+            pendingPlanChangeAt: { lte: now },
+            pendingPlanId: { not: null },
+            status: { in: CHANGEABLE_STATUSES },
+         },
+         include: subscriptionInclude,
+      });
+
+      let processed = 0;
+      let failed = 0;
+      const errors: ApplyDuePendingDowngradesResult['errors'] = [];
+
+      for (const sub of dueSubs) {
+         try {
+            if (sub.autoRenew && !sub.cancelAtPeriodEnd) {
+               await this.renewSubscription(sub.id);
+            } else {
+               await this.applyPendingDowngrade(sub.id);
+            }
+            processed++;
+         } catch (error) {
+            failed++;
+            const message = error instanceof Error ? error.message : String(error);
+            errors.push({ subscriptionId: sub.id, message });
+            appLogger.error(
+               { err: error, subscriptionId: sub.id, userId: sub.userId },
+               'Failed to apply due pending downgrade',
+            );
+         }
+      }
+
+      return { processed, failed, errors };
+   }
+
+   async expireDueCanceledSubscriptions(now: Date = new Date()): Promise<SubscriptionJobBatchResult> {
+      const dueSubs = await this.prisma.userSubscription.findMany({
+         where: {
+            cancelAtPeriodEnd: true,
+            currentPeriodEnd: { lte: now },
+            status: { in: CHANGEABLE_STATUSES },
+         },
+      });
+
+      let processed = 0;
+      let failed = 0;
+      const errors: SubscriptionJobBatchResult['errors'] = [];
+
+      for (const sub of dueSubs) {
+         try {
+            const updated = await runWrite(this.prisma, (tx) =>
+               tx.userSubscription.update({
+                  where: { id: sub.id },
+                  data: {
+                     status: SubscriptionStatus.EXPIRED,
+                     endDate: now,
+                     autoRenew: false,
+                  },
+               }),
+            );
+            emitCacheInvalidation('user-subscription', 'updated', sub.id, { userId: sub.userId });
+            emitSubscriptionCatalogInvalidation({
+               userId: sub.userId,
+               subscriptionId: sub.id,
+               planId: updated.planId,
+               action: 'updated',
+            });
+            processed++;
+         } catch (error) {
+            failed++;
+            const message = error instanceof Error ? error.message : String(error);
+            errors.push({ subscriptionId: sub.id, message });
+            appLogger.error(
+               { err: error, subscriptionId: sub.id, userId: sub.userId },
+               'Failed to expire canceled subscription at period end',
+            );
+         }
+      }
+
+      return { processed, failed, errors };
+   }
+
+   async applyDueSubscriptionRenewals(now: Date = new Date()): Promise<SubscriptionJobBatchResult> {
+      const dueSubs = await this.prisma.userSubscription.findMany({
+         where: {
+            autoRenew: true,
+            cancelAtPeriodEnd: false,
+            currentPeriodEnd: { lte: now },
+            status: { in: CHANGEABLE_STATUSES },
+            plan: { billingInterval: { not: BillingInterval.LIFETIME } },
+            NOT: {
+               AND: [
+                  { pendingPlanChangeType: PlanChangeType.DOWNGRADE },
+                  { pendingPlanId: { not: null } },
+                  { pendingPlanChangeAt: { lte: now } },
+               ],
+            },
+         },
+         include: subscriptionInclude,
+      });
+
+      let processed = 0;
+      let failed = 0;
+      const errors: SubscriptionJobBatchResult['errors'] = [];
+
+      for (const sub of dueSubs) {
+         try {
+            await this.renewSubscription(sub.id);
+            processed++;
+         } catch (error) {
+            failed++;
+            const message = error instanceof Error ? error.message : String(error);
+            errors.push({ subscriptionId: sub.id, message });
+            appLogger.error(
+               { err: error, subscriptionId: sub.id, userId: sub.userId },
+               'Failed to renew subscription at period end',
+            );
+         }
+      }
+
+      return { processed, failed, errors };
    }
 
    async renewSubscription(id: string): Promise<UserSubscriptionDto> {
@@ -459,13 +676,10 @@ export class UserSubscriptionService {
             pastDueRetryCount: 0,
          };
          if (pendingPlanToApply) {
-            renewUpdateData.plan = { connect: { id: pendingPlanToApply.id } };
-            renewUpdateData.pendingPlan = { disconnect: true };
-            renewUpdateData.pendingPlanChangeAt = null;
-            renewUpdateData.pendingPlanChangeType = null;
+            Object.assign(renewUpdateData, this.buildPendingPlanSwapUpdate(pendingPlanToApply));
          }
 
-         const updated = await this.prisma.$transaction(async (tx) => {
+         const updated = await runInTransaction(this.prisma, async (tx) => {
             const sub = await tx.userSubscription.update({
                where: { id },
                data: renewUpdateData,
@@ -489,11 +703,14 @@ export class UserSubscriptionService {
             return sub;
          });
 
-         emitCacheInvalidation('user-subscription', 'updated', id, { userId: existing.userId });
+         if (pendingPlanToApply) {
+            this.emitPendingPlanApplied(id, existing.userId, pendingPlanToApply.id);
+         } else {
+            emitCacheInvalidation('user-subscription', 'updated', id, { userId: existing.userId });
+         }
          return toUserSubscriptionDto(updated);
       } catch (error) {
-         if (error instanceof SubscriptionError) throw error;
-         throw SubscriptionError.internal(subMsg.renew_failed);
+         rethrowServiceError(error, { operation: 'renewSubscription' }, subMsg.renew_failed);
       }
    }
 
@@ -501,12 +718,11 @@ export class UserSubscriptionService {
       try {
          const existing = await this.prisma.userSubscription.findUnique({ where: { id } });
          if (!existing) throw SubscriptionError.notFound(subMsg.not_found);
-         await this.prisma.userSubscription.delete({ where: { id } });
+         await runWrite(this.prisma, (tx) => tx.userSubscription.delete({ where: { id } }));
          emitCacheInvalidation('user-subscription', 'deleted', id, { userId: existing.userId });
          return true;
       } catch (error) {
-         if (error instanceof SubscriptionError) throw error;
-         throw SubscriptionError.internal(subMsg.delete_failed);
+         rethrowServiceError(error, { operation: 'deleteSubscription' }, subMsg.delete_failed);
       }
    }
 

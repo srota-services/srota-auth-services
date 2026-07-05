@@ -5,6 +5,12 @@ import { config } from '../../src/config/env';
 jest.mock('amqplib', () => {
    const mockChannel = {
       assertExchange: jest.fn().mockResolvedValue(undefined),
+      assertQueue: jest.fn().mockResolvedValue(undefined),
+      bindQueue: jest.fn().mockResolvedValue(undefined),
+      prefetch: jest.fn().mockResolvedValue(undefined),
+      consume: jest.fn().mockResolvedValue({ consumerTag: 'test-consumer' }),
+      ack: jest.fn(),
+      cancel: jest.fn().mockResolvedValue(undefined),
       publish: jest.fn().mockReturnValue(true),
       close: jest.fn().mockResolvedValue(undefined),
    };
@@ -234,6 +240,23 @@ describe('RabbitMQService', () => {
          expect(mockChannel.publish).toHaveBeenCalledWith(
             config.RABBITMQ_AUTHORS_EXCHANGE,
             'author.deleted',
+            Buffer.from(JSON.stringify(data)),
+            expect.objectContaining({
+               persistent: true,
+               timestamp: expect.any(Number),
+            })
+         );
+      });
+
+      test('should publish organization created event', async () => {
+         const data = { organizationId: 'org-123' };
+         mockChannel.publish.mockReturnValueOnce(true);
+
+         await rabbitmqService.publishOrganizationCreated(data);
+
+         expect(mockChannel.publish).toHaveBeenCalledWith(
+            config.RABBITMQ_ORGANIZATIONS_EXCHANGE,
+            'organization.created',
             Buffer.from(JSON.stringify(data)),
             expect.objectContaining({
                persistent: true,

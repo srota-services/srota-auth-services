@@ -40,10 +40,81 @@ function keysForResource(
             ['organizations'],
          ];
       }
+      case 'author-organization-invitation': {
+         const orgId = relatedIds['organizationId'];
+         const authorId = relatedIds['authorId'];
+         const keys: string[][] = [['author-organization-invitations']];
+         if (orgId) {
+            keys.push(
+               ['organizations', orgId, 'author-invitations'],
+               ['organizations', orgId, 'authors'],
+               ['organizations', orgId],
+            );
+         }
+         if (authorId) {
+            keys.push(['authors', authorId, 'organization-invitations']);
+         }
+         keys.push(['authors', 'me', 'organization-invitations']);
+         return keys;
+      }
+      case 'author-organization-collaboration': {
+         const orgId = relatedIds['organizationId'];
+         const authorId = relatedIds['authorId'];
+         const keys: string[][] = [['author-organization-collaborations']];
+         if (orgId) {
+            keys.push(
+               ['organizations', orgId, 'author-collaborations'],
+               ['organizations', orgId, 'authors'],
+               ['organizations', orgId],
+            );
+         }
+         if (authorId) {
+            keys.push(['authors', authorId, 'organization-collaborations']);
+         }
+         keys.push(['authors', 'me', 'organization-collaborations']);
+         return keys;
+      }
+      case 'organization-review': {
+         const orgId = relatedIds['organizationId'] ?? id;
+         return [['organization-reviews'], ['organization-reviews', orgId], ['organizations', orgId]];
+      }
+      case 'author-review': {
+         const authorId = relatedIds['authorId'] ?? id;
+         return [['author-reviews'], ['author-reviews', authorId], ['authors', authorId]];
+      }
       case 'subscription-plan':
          return [['subscription-plans'], ['subscription-plans', id]];
       case 'user-subscription':
          return [['subscriptions'], ['subscriptions', 'me'], ['subscriptions', id]];
+      case 'subscription-catalog':
+         return [
+            ['subscriptions'],
+            ['subscriptions', 'me'],
+            ['audiobooks'],
+            ['user-audiobooks'],
+            ['user-audiobooks', 'me'],
+         ];
+      case 'subscription-gating': {
+         const planId = relatedIds['planId'];
+         const audiobookId = relatedIds['audiobookId'];
+         const chapterId = relatedIds['chapterId'];
+         const keys: string[][] = [
+            ['subscription-plans'],
+            ['audiobooks'],
+            ['user-audiobooks'],
+            ['user-audiobooks', 'me'],
+         ];
+         if (planId) {
+            keys.push(['subscription-plans', planId]);
+         }
+         if (audiobookId) {
+            keys.push(['audiobooks', audiobookId], ['audiobooks', audiobookId, 'chapters']);
+            if (chapterId) {
+               keys.push(['audiobooks', audiobookId, 'chapters', chapterId]);
+            }
+         }
+         return keys;
+      }
       case 'user-device':
          return [['devices'], ['devices', id]];
       default:

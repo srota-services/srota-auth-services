@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { appLogger } from '../utils/logger';
+import { appLogger, errorLogger } from '../utils/logger';
 import rateLimit from 'express-rate-limit';
 import { JWTUtils } from '../utils/crypto';
 import { redisService } from '../services/redis';
@@ -10,6 +10,7 @@ import { DomainError } from '../types/domain';
 import { AuthRoleGroups } from '../constants/authRoles';
 
 export { validateCsrf, requiresCsrfProtection } from './csrf';
+export { blockGuestMutations, isGuestLocationOnlyProfileUpdate } from './roleMiddleware';
 
 /**
  * Authentication middleware
@@ -128,6 +129,19 @@ export const registerRateLimit = rateLimit({
 });
 
 /**
+ * Rate limiting middleware for guest session creation
+ */
+export const guestRateLimit = rateLimit({
+   windowMs: 60 * 60 * 1000, // 1 hour
+   max: 30, // 30 guest sessions per hour per IP
+   message: {
+      error: 'Too many guest session requests, please try again later',
+   },
+   standardHeaders: true,
+   legacyHeaders: false,
+});
+
+/**
  * General rate limiting middleware
  */
 export const generalRateLimit = rateLimit({
@@ -145,11 +159,29 @@ export const generalRateLimit = rateLimit({
  */
 export const errorHandler = (
    error: Error,
-   _req: Request,
+   req: Request,
    res: Response,
    _next: NextFunction
 ): void => {
-   appLogger.error({ err: error }, 'Request error');
+   const statusCode =
+      error instanceof ValidationError ? error.statusCode :
+      error instanceof AuthError ? error.statusCode :
+      error instanceof SubscriptionError ? error.statusCode :
+      error instanceof DomainError ? error.statusCode :
+      500;
+
+   const errorContext = {
+      err: error,
+      method: req.method,
+      url: req.originalUrl,
+      statusCode,
+   };
+
+   if (statusCode >= 500) {
+      errorLogger.error(errorContext, 'Request error');
+   } else {
+      appLogger.warn(errorContext, 'Client error');
+   }
 
    // Handle specific error types
    if (error instanceof ValidationError) {
@@ -254,7 +286,7 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction): 
 export const corsOptions = {
    origin: true,
    credentials: true,
-   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
 };
 

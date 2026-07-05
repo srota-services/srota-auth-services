@@ -7,6 +7,7 @@ import {
    isOrgCoordinatorRole,
    isPartnerAppRole,
    isStaffRole,
+   isSubscriptionGatingEnforcedRole,
    normalizeAuthRole,
 } from '../../src/constants/authRoles';
 import { ClientType } from '../../src/constants/clientType';
@@ -72,6 +73,14 @@ describe('authRoles', () => {
          expect(isDeviceLimitEnforcedRole(AuthRole.ORG_ADMIN)).toBe(false);
          expect(isDeviceLimitEnforcedRole(AuthRole.ORG_COORDINATOR)).toBe(false);
          expect(isDeviceLimitEnforcedRole(AuthRole.GLOBAL_ADMIN)).toBe(false);
+      });
+
+      test('isSubscriptionGatingEnforcedRole applies to LISTENER and GUEST only', () => {
+         expect(isSubscriptionGatingEnforcedRole(AuthRole.LISTENER)).toBe(true);
+         expect(isSubscriptionGatingEnforcedRole(AuthRole.GUEST)).toBe(true);
+         expect(isSubscriptionGatingEnforcedRole(AuthRole.AUTHOR)).toBe(false);
+         expect(isSubscriptionGatingEnforcedRole(AuthRole.GLOBAL_ADMIN)).toBe(false);
+         expect(isSubscriptionGatingEnforcedRole(undefined)).toBe(false);
       });
    });
 });

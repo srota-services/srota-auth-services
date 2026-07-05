@@ -1,4 +1,4 @@
-import { BillingInterval, Prisma, PrismaClient } from '@prisma/client';
+import { BillingInterval, Prisma, PrismaClient, SubscriptionTierLevel } from '@prisma/client';
 import { config } from '../src/config/env';
 import { SubscriptionPlanFeatures } from '../src/types/subscriptionPlanFeatures';
 import { seedImagePlaceholderSpecs } from './imagePlaceholderSpecs.seed';
@@ -9,14 +9,14 @@ const PLANS: Array<{
    name: string;
    description: string;
    price: number;
-   tierLevel: number;
+   tierLevel: SubscriptionTierLevel;
    features: SubscriptionPlanFeatures;
 }> = [
    {
       name: 'Base',
       description: 'Base subscription plan',
       price: 99,
-      tierLevel: 1,
+      tierLevel: SubscriptionTierLevel.BASE,
       features: {
          audiobookCatalog: 'selected',
          maxDevices: 1,
@@ -28,7 +28,7 @@ const PLANS: Array<{
       name: 'Standard',
       description: 'Standard subscription plan',
       price: 249,
-      tierLevel: 2,
+      tierLevel: SubscriptionTierLevel.STANDARD,
       features: {
          audiobookCatalog: 'curated_wide',
          maxDevices: 2,
@@ -40,7 +40,7 @@ const PLANS: Array<{
       name: 'Premium',
       description: 'Premium subscription plan',
       price: 399,
-      tierLevel: 3,
+      tierLevel: SubscriptionTierLevel.PREMIUM,
       features: {
          audiobookCatalog: 'all',
          maxDevices: 3,

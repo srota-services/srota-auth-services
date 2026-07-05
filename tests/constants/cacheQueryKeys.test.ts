@@ -39,4 +39,54 @@ describe('buildCacheInvalidationEvent (auth)', () => {
          ]),
       );
    });
+
+   it('builds subscription-catalog keys including subscriptions and audiobooks', () => {
+      const event = buildCacheInvalidationEvent('subscription-catalog', 'updated', 'sub-1', {
+         userId: 'user-1',
+         planId: 'plan-1',
+      });
+
+      expect(event.queryKeys).toEqual(
+         expect.arrayContaining([
+            ['subscriptions'],
+            ['subscriptions', 'me'],
+            ['audiobooks'],
+            ['user-audiobooks'],
+            ['user-audiobooks', 'me'],
+         ]),
+      );
+      expect(event.relatedIds).toEqual({ userId: 'user-1', planId: 'plan-1' });
+   });
+
+   it('builds subscription-gating keys including plans and catalog', () => {
+      const event = buildCacheInvalidationEvent('subscription-gating', 'updated', 'plan-1', {
+         planId: 'plan-1',
+      });
+
+      expect(event.queryKeys).toEqual(
+         expect.arrayContaining([
+            ['subscription-plans'],
+            ['subscription-plans', 'plan-1'],
+            ['audiobooks'],
+            ['user-audiobooks'],
+            ['user-audiobooks', 'me'],
+         ]),
+      );
+   });
+
+   it('builds subscription-gating keys scoped to chapter tier changes', () => {
+      const event = buildCacheInvalidationEvent('subscription-gating', 'updated', 'ch-1', {
+         audiobookId: 'ab-1',
+         chapterId: 'ch-1',
+      });
+
+      expect(event.queryKeys).toEqual(
+         expect.arrayContaining([
+            ['audiobooks'],
+            ['audiobooks', 'ab-1'],
+            ['audiobooks', 'ab-1', 'chapters'],
+            ['audiobooks', 'ab-1', 'chapters', 'ch-1'],
+         ]),
+      );
+   });
 });

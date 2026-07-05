@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma, BillingInterval } from '@prisma/client';
+import { PrismaClient, Prisma, BillingInterval, SubscriptionTierLevel } from '@prisma/client';
 import {
    SubscriptionPlanDto,
    CreateSubscriptionPlanDto,
@@ -9,6 +9,9 @@ import {
 import { SubscriptionError } from '../types/subscription';
 import { subscriptionMessages } from '../utils/subscriptionMessages';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { emitSubscriptionGatingInvalidation } from './subscriptionGatingInvalidation';
+import { runWrite } from '../utils/prismaTransaction';
+import { rethrowServiceError } from '../utils/serviceError';
 
 const msg = subscriptionMessages.error.subscription_plans;
 
@@ -23,28 +26,30 @@ export class SubscriptionPlanService {
          });
          if (existing) throw SubscriptionError.conflict(msg.name_exists);
          if (data.price < 0) throw SubscriptionError.validation(msg.price_invalid);
-         if (data.tierLevel !== undefined && (!Number.isInteger(data.tierLevel) || data.tierLevel < 0)) {
+         if (!Object.values(SubscriptionTierLevel).includes(data.tierLevel)) {
             throw SubscriptionError.validation(msg.tier_invalid);
          }
 
-         const created = await this.prisma.subscriptionPlan.create({
-            data: {
-               name: trimmedName,
-               description: data.description ?? null,
-               price: new Prisma.Decimal(data.price),
-               currency: data.currency ?? 'USD',
-               tierLevel: data.tierLevel ?? 0,
-               billingInterval: data.billingInterval ?? BillingInterval.MONTHLY,
-               trialDays: data.trialDays ?? 0,
-               features: data.features === undefined ? Prisma.JsonNull : (data.features as Prisma.InputJsonValue),
-               isActive: data.isActive ?? true,
-            },
-         });
+         const created = await runWrite(this.prisma, (tx) =>
+            tx.subscriptionPlan.create({
+               data: {
+                  name: trimmedName,
+                  description: data.description ?? null,
+                  price: new Prisma.Decimal(data.price),
+                  currency: data.currency ?? 'USD',
+                  tierLevel: data.tierLevel,
+                  billingInterval: data.billingInterval ?? BillingInterval.MONTHLY,
+                  trialDays: data.trialDays ?? 0,
+                  features: data.features === undefined ? Prisma.JsonNull : (data.features as Prisma.InputJsonValue),
+                  isActive: data.isActive ?? true,
+               },
+            }),
+         );
          emitCacheInvalidation('subscription-plan', 'created', created.id);
+         emitSubscriptionGatingInvalidation({ action: 'created', planId: created.id });
          return toSubscriptionPlanDto(created);
       } catch (error) {
-         if (error instanceof SubscriptionError) throw error;
-         throw SubscriptionError.internal(msg.create_failed);
+         rethrowServiceError(error, { operation: 'createPlan' }, msg.create_failed);
       }
    }
 
@@ -71,8 +76,8 @@ export class SubscriptionPlanService {
             this.prisma.subscriptionPlan.findMany({ where, skip, take: limit, orderBy: { [sortBy]: sortOrder } }),
          ]);
          return { plans: plans.map(toSubscriptionPlanDto), totalCount };
-      } catch {
-         throw SubscriptionError.internal(msg.fetch_failed);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getAllPlans' }, msg.fetch_failed);
       }
    }
 
@@ -82,8 +87,7 @@ export class SubscriptionPlanService {
          if (!plan) throw SubscriptionError.notFound(msg.not_found);
          return toSubscriptionPlanDto(plan);
       } catch (error) {
-         if (error instanceof SubscriptionError) throw error;
-         throw SubscriptionError.internal(msg.fetch_failed);
+         rethrowServiceError(error, { operation: 'getPlanById' }, msg.fetch_failed);
       }
    }
 
@@ -107,7 +111,7 @@ export class SubscriptionPlanService {
          }
          if (data.currency !== undefined) updateData.currency = data.currency;
          if (data.tierLevel !== undefined) {
-            if (!Number.isInteger(data.tierLevel) || data.tierLevel < 0) {
+            if (!Object.values(SubscriptionTierLevel).includes(data.tierLevel)) {
                throw SubscriptionError.validation(msg.tier_invalid);
             }
             updateData.tierLevel = data.tierLevel;
@@ -118,12 +122,14 @@ export class SubscriptionPlanService {
             updateData.features = data.features === null ? Prisma.JsonNull : (data.features as Prisma.InputJsonValue);
          }
          if (data.isActive !== undefined) updateData.isActive = data.isActive;
-         const updated = await this.prisma.subscriptionPlan.update({ where: { id }, data: updateData });
+         const updated = await runWrite(this.prisma, (tx) =>
+            tx.subscriptionPlan.update({ where: { id }, data: updateData }),
+         );
          emitCacheInvalidation('subscription-plan', 'updated', id);
+         emitSubscriptionGatingInvalidation({ action: 'updated', planId: id });
          return toSubscriptionPlanDto(updated);
       } catch (error) {
-         if (error instanceof SubscriptionError) throw error;
-         throw SubscriptionError.internal(msg.update_failed);
+         rethrowServiceError(error, { operation: 'updatePlan' }, msg.update_failed);
       }
    }
 
@@ -133,16 +139,19 @@ export class SubscriptionPlanService {
          if (!existing) throw SubscriptionError.notFound(msg.not_found);
          const subscriptionsCount = await this.prisma.userSubscription.count({ where: { planId: id } });
          if (subscriptionsCount > 0) {
-            await this.prisma.subscriptionPlan.update({ where: { id }, data: { isActive: false } });
+            await runWrite(this.prisma, (tx) =>
+               tx.subscriptionPlan.update({ where: { id }, data: { isActive: false } }),
+            );
             emitCacheInvalidation('subscription-plan', 'updated', id);
+            emitSubscriptionGatingInvalidation({ action: 'updated', planId: id });
             return { deleted: false, deactivated: true };
          }
-         await this.prisma.subscriptionPlan.delete({ where: { id } });
+         await runWrite(this.prisma, (tx) => tx.subscriptionPlan.delete({ where: { id } }));
          emitCacheInvalidation('subscription-plan', 'deleted', id);
+         emitSubscriptionGatingInvalidation({ action: 'deleted', planId: id });
          return { deleted: true, deactivated: false };
       } catch (error) {
-         if (error instanceof SubscriptionError) throw error;
-         throw SubscriptionError.internal(msg.delete_failed);
+         rethrowServiceError(error, { operation: 'deletePlan' }, msg.delete_failed);
       }
    }
 }

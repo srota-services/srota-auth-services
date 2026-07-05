@@ -4,6 +4,7 @@ export const AuthRole = {
    ORG_ADMIN: 'ORG_ADMIN',
    ORG_COORDINATOR: 'ORG_COORDINATOR',
    AUTHOR: 'AUTHOR',
+   GUEST: 'GUEST',
 } as const;
 
 export type AuthRoleValue = (typeof AuthRole)[keyof typeof AuthRole];
@@ -18,7 +19,15 @@ export const AuthRoleGroups = {
       AuthRole.ORG_ADMIN,
       AuthRole.ORG_COORDINATOR,
    ],
+   ALL_REGISTERED: [
+      AuthRole.LISTENER,
+      AuthRole.GLOBAL_ADMIN,
+      AuthRole.ORG_ADMIN,
+      AuthRole.ORG_COORDINATOR,
+      AuthRole.AUTHOR,
+   ],
    ALL_AUTHENTICATED: [
+      AuthRole.GUEST,
       AuthRole.LISTENER,
       AuthRole.GLOBAL_ADMIN,
       AuthRole.ORG_ADMIN,
@@ -61,6 +70,17 @@ export function isOrgStaffRole(role: string | undefined): boolean {
    return isOrgAdminRole(role) || isOrgCoordinatorRole(role);
 }
 
+export function isGuestRole(role: string | undefined): boolean {
+   return normalizeAuthRole(role) === normalizeAuthRole(AuthRole.GUEST);
+}
+
+export function isRegisteredUserRole(role: string | undefined): boolean {
+   const normalized = normalizeAuthRole(role);
+   return AuthRoleGroups.ALL_REGISTERED.some(
+      (allowed) => normalizeAuthRole(allowed) === normalized,
+   );
+}
+
 /** Device is optional during registration OTP verify for all roles except LISTENER. */
 export function isDeviceOptionalForRole(role: string | undefined): boolean {
    return normalizeAuthRole(role) !== normalizeAuthRole(AuthRole.LISTENER);
@@ -69,6 +89,15 @@ export function isDeviceOptionalForRole(role: string | undefined): boolean {
 /** Subscription device registration and removal quotas apply to LISTENER only. */
 export function isDeviceLimitEnforcedRole(role: string | undefined): boolean {
    return normalizeAuthRole(role) === normalizeAuthRole(AuthRole.LISTENER);
+}
+
+/** Active subscription tier checks apply to LISTENER and GUEST only. */
+export function isSubscriptionGatingEnforcedRole(role: string | undefined): boolean {
+   const normalized = normalizeAuthRole(role);
+   return (
+      normalized === normalizeAuthRole(AuthRole.LISTENER) ||
+      normalized === normalizeAuthRole(AuthRole.GUEST)
+   );
 }
 
 export function isPartnerAppRole(role: string | undefined): boolean {

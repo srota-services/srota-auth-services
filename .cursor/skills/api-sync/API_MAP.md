@@ -24,9 +24,10 @@ Path prefix: `/api/v1` (mobile: `EXPO_PUBLIC_API_V1_PATH`).
 | Devices | `/auth/devices`, `/auth/devices/*` | `services/devices.ts` | rarely used |
 | Subscriptions | `/subscriptions/*` | `services/subscriptions.ts` | `src/utils/audiobookApi.ts` (`getSubscriptionPlans`) |
 | Organizations | `/organizations/*` | `services/organizations.ts` | `src/utils/partnerApi.ts`, `src/types/partner.ts` |
-| Authors | `/authors/*` | via org/user services | `src/utils/partnerApi.ts` |
-| Catalog | `/catalog/organizations/:id`, `/catalog/authors/:id` | search `catalog` in services | search `catalog` in utils |
-| User profile | `/users/*`, profile routes | `services/user.ts` | `src/utils/partnerApi.ts`, `tests/userProfileApi.test.ts` |
+| Authors | `/authors/*`, `/authors/me` (avatar, discoverable), `/catalog/authors/discoverable` | via org/user services | `src/utils/partnerApi.ts` |
+| Catalog | `/catalog/organizations/:id`, `/catalog/authors/:id`, `/catalog/authors/discoverable` | search `catalog` in services | search `catalog` in utils |
+| User profile | `/auth/user/profile`, `/auth/users/:userId/profile` (username, avatar, prefs + demographics) | `services/user.ts` | `src/utils/partnerApi.ts`, `tests/userProfileApi.test.ts` |
+| Org/author reviews | `/auth/organization-reviews/*`, `/auth/author-reviews/*` | search `organization-reviews` / `author-reviews` in services | search in partner utils |
 
 ---
 

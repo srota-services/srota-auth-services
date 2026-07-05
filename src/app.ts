@@ -9,8 +9,11 @@ import authRoutes from './routes/auth';
 import subscriptionPlanRoutes from './routes/subscriptionPlan';
 import userSubscriptionRoutes from './routes/userSubscription';
 import { createOrganizationRoutes } from './routes/organizationRoutes';
+import { OrganizationController } from './controllers/OrganizationController';
 import { createAuthorRoutes } from './routes/authorRoutes';
 import { createCatalogRoutes } from './routes/catalogRoutes';
+import { createOrganizationReviewRoutes } from './routes/organizationReviewRoutes';
+import { createAuthorReviewRoutes } from './routes/authorReviewRoutes';
 import { createDomainEventsRoutes } from './routes/domainEventsRoutes';
 import {
    errorHandler,
@@ -19,6 +22,7 @@ import {
    corsOptions,
    securityHeaders,
    authenticateToken,
+   blockGuestMutations,
 } from './middleware';
 import { redisService } from './services/redis';
 import { rabbitmqService } from './services/rabbitmq';
@@ -26,6 +30,10 @@ import { getDependencyHealth, isDependencyHealthOk } from './services/health';
 import { requireHealthSupportAuth } from './middleware/healthSupportAuth';
 import { appLogger } from './utils/logger';
 import { setupSwagger } from './config/swagger';
+import { ChapterGatingConsumerWorkerFactory } from './workers/ChapterGatingConsumerWorker';
+import { SubscriptionDowngradeJobWorkerFactory } from './workers/SubscriptionDowngradeJobWorker';
+import { SubscriptionRenewalJobWorkerFactory } from './workers/SubscriptionRenewalJobWorker';
+import { SubscriptionExpirationJobWorkerFactory } from './workers/SubscriptionExpirationJobWorker';
 
 /**
  * Create and configure Express application
@@ -78,8 +86,15 @@ export const createApp = (): express.Application => {
    app.use('/auth/subscription-plans', subscriptionPlanRoutes);
    app.use('/auth/subscriptions', userSubscriptionRoutes);
    app.use('/auth/organizations', authenticateToken, createOrganizationRoutes(prisma));
+   app.get(
+      '/auth/users/me/organization-memberships',
+      authenticateToken,
+      new OrganizationController(prisma).listMyOrganizationMemberships,
+   );
    app.use('/auth/authors', authenticateToken, createAuthorRoutes(prisma));
    app.use('/auth/catalog', authenticateToken, createCatalogRoutes(prisma));
+   app.use('/auth/organization-reviews', authenticateToken, blockGuestMutations(), createOrganizationReviewRoutes(prisma));
+   app.use('/auth/author-reviews', authenticateToken, blockGuestMutations(), createAuthorReviewRoutes(prisma));
    app.use('/auth/events', createDomainEventsRoutes());
 
    setupSwagger(app);
@@ -101,6 +116,8 @@ export const createApp = (): express.Application => {
             organizations: '/auth/organizations',
             authors: '/auth/authors',
             catalog: '/auth/catalog',
+            organizationReviews: '/auth/organization-reviews',
+            authorReviews: '/auth/author-reviews',
             events: '/auth/events/stream',
          },
       });
@@ -168,6 +185,13 @@ export const startServer = async (): Promise<void> => {
          () => redisService.disconnect()
       );
 
+      await ChapterGatingConsumerWorkerFactory.startWorker();
+
+      const prisma = new PrismaClient();
+      await SubscriptionRenewalJobWorkerFactory.startWorker(prisma);
+      await SubscriptionDowngradeJobWorkerFactory.startWorker(prisma);
+      await SubscriptionExpirationJobWorkerFactory.startWorker(prisma);
+
       // Create Express app
       const app = createApp();
 
@@ -187,6 +211,10 @@ export const startServer = async (): Promise<void> => {
       // Graceful shutdown
       process.on('SIGTERM', async () => {
          appLogger.info('SIGTERM received, shutting down gracefully');
+         await ChapterGatingConsumerWorkerFactory.stopWorker();
+         await SubscriptionRenewalJobWorkerFactory.stopWorker();
+         await SubscriptionDowngradeJobWorkerFactory.stopWorker();
+         await SubscriptionExpirationJobWorkerFactory.stopWorker();
          await rabbitmqService.disconnect();
          await redisService.disconnect();
          process.exit(0);
@@ -194,6 +222,10 @@ export const startServer = async (): Promise<void> => {
 
       process.on('SIGINT', async () => {
          appLogger.info('SIGINT received, shutting down gracefully');
+         await ChapterGatingConsumerWorkerFactory.stopWorker();
+         await SubscriptionRenewalJobWorkerFactory.stopWorker();
+         await SubscriptionDowngradeJobWorkerFactory.stopWorker();
+         await SubscriptionExpirationJobWorkerFactory.stopWorker();
          await rabbitmqService.disconnect();
          await redisService.disconnect();
          process.exit(0);

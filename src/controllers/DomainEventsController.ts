@@ -37,7 +37,7 @@ export class DomainEventsController {
     *         description: JWT access token (alternative to Authorization header for EventSource)
     *     responses:
     *       200:
-    *         description: SSE stream (`event: cache-invalidate`, comment heartbeats every 30s)
+    *         description: 'SSE stream (event cache-invalidate, comment heartbeats every 30s)'
     *         content:
     *           text/event-stream:
     *             schema:

@@ -20,6 +20,9 @@ export function validateUserProfileUpdate(req: Request, _res: Response, next: Ne
          gender,
          location,
          age,
+         username,
+         preferences,
+         avatar,
       } = req.body;
 
       const allowedFields = [
@@ -30,6 +33,9 @@ export function validateUserProfileUpdate(req: Request, _res: Response, next: Ne
          'gender',
          'location',
          'age',
+         'username',
+         'preferences',
+         'avatar',
       ];
       const extraFields = Object.keys(req.body).filter((key) => !allowedFields.includes(key));
       if (extraFields.length > 0) {
@@ -118,7 +124,29 @@ export function validateUserProfileUpdate(req: Request, _res: Response, next: Ne
          req.body.age = parsedAge;
       }
 
-      if ([firstName, lastName, address, contact, gender, location, age].every((value) => value === undefined)) {
+      if (username !== undefined) {
+         if (typeof username !== 'string' || username.trim().length < 3 || username.length > 50) {
+            throw new ValidationError('Invalid username', { username: ['Username must be 3-50 characters'] });
+         }
+         req.body.username = username.trim().toLowerCase();
+      }
+
+      if (preferences !== undefined) {
+         if (preferences !== null && (typeof preferences !== 'object' || Array.isArray(preferences))) {
+            throw new ValidationError('Invalid preferences', { preferences: ['Preferences must be an object or null'] });
+         }
+      }
+
+      if (avatar !== undefined && avatar !== null && typeof avatar !== 'string') {
+         throw new ValidationError('Invalid avatar', { avatar: ['Avatar must be a string or null'] });
+      }
+
+      if (
+         [firstName, lastName, address, contact, gender, location, age, username, preferences, avatar].every(
+            (value) => value === undefined,
+         ) &&
+         !(req as Request & { file?: Express.Multer.File }).file
+      ) {
          throw new ValidationError('No update fields provided', {
             fields: ['At least one profile field must be provided'],
          });

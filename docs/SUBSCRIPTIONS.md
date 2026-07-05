@@ -22,7 +22,7 @@ All require `Authorization: Bearer <accessToken>`.
 |--------|------|--------|
 | GET | `/me` | User — active subscription |
 | GET | `/me/history` | User |
-| GET | `/me/tier` | User — `{ tier: number \| null }` |
+| GET | `/me/tier` | User — `{ tier: "BASE" \| "STANDARD" \| "PREMIUM" \| null }` |
 | GET | `/user/:userId` | Self or Admin |
 | GET | `/` | Admin |
 | POST | `/` | User (`planId`; optional `userId` for admin) |
@@ -66,6 +66,35 @@ Plan `features.maxDevices` and `features.deviceChangesPerMonth` are enforced at 
 - **Renewal** (`POST /:id/renew`): if a pending downgrade is due, `planId` switches first; then the period advances and a **full** `RENEWAL_CHARGE` is recorded for the active plan price.
 - **Cancel scheduled downgrade**: `DELETE /auth/subscriptions/:id/pending-change`.
 
+### Scheduled subscription jobs
+
+Three background jobs run daily (UTC). Each uses a Redis lock so only one auth-service instance runs it when multiple replicas are deployed. Disable all with `SUBSCRIPTION_JOBS_ENABLED=false` (defaults to off in `NODE_ENV=test`).
+
+| Time (UTC) | Job | Cron (default) | Action |
+|------------|-----|------------------|--------|
+| 12:00 AM | Renewal | `0 0 * * *` (`SUBSCRIPTION_RENEWAL_CRON`) | Renew `autoRenew` subscriptions whose period has ended (excluding those with a due pending downgrade) |
+| 12:01 AM | Downgrade | `1 0 * * *` (`SUBSCRIPTION_DOWNGRADE_CRON`) | Apply scheduled downgrades whose `pendingPlanChangeAt` has passed |
+| 12:02 AM | Expiration | `2 0 * * *` (`SUBSCRIPTION_EXPIRATION_CRON`) | Expire subscriptions with `cancelAtPeriodEnd=true` whose period has ended (`status` → `EXPIRED`) |
+
+**Renewal job details**
+
+- `autoRenew=true`, `cancelAtPeriodEnd=false`, period ended, not lifetime, no due pending downgrade → `renewSubscription` (`RENEWAL_CHARGE`)
+- Redis lock: `subscription-renewal-job`
+
+**Downgrade job details**
+
+| Subscription state | Job behavior |
+|--------------------|--------------|
+| `autoRenew === true` and `cancelAtPeriodEnd === false` | Applies downgrade **and** renews the period (`RENEWAL_CHARGE` on the new plan) — same as `POST /:id/renew` |
+| Otherwise | Applies plan swap only (clears pending fields; no renewal charge) |
+
+- Redis lock: `subscription-downgrade-job`
+
+**Expiration job details**
+
+- Subscriptions with `cancelAtPeriodEnd=true` and `currentPeriodEnd <= now` → `EXPIRED`, `endDate` set, cache invalidated
+- Redis lock: `subscription-expiration-job`
+
 Validation: target plan must be active, same `billingInterval` and `currency` as the current plan, and a different tier. Lifetime plans cannot change. During `TRIALING`, upgrades apply immediately with `prorationAmount: 0`.
 
 Proration formula: `max(0, (newPrice - oldPrice) * remainingPeriodRatio)` where `remainingPeriodRatio` is the fraction of time left in `[currentPeriodStart, currentPeriodEnd]`.
@@ -74,4 +103,28 @@ Billing events are ledger-only (no payment gateway in auth-service); clients or 
 
 ## app-service gating
 
-`GET /api/v1/audiobooks/:id` returns `subscriptionAccess` via `GET /auth/subscriptions/me/tier` using the same JWT. Set `AUTH_SERVICE_URL` in app-service.
+Content tier gating is configured in **app-service** on audiobooks and chapters using `SubscriptionPlan.tierLevel` from this service:
+
+| `subscriptionGatingMode` | Where tier is set | Access behavior |
+|--------------------------|-------------------|-----------------|
+| `NONE` | nowhere | Logged-in users pass; no subscription required |
+| `AUDIOBOOK` | `audiobook.minSubscriptionTier` | Whole book gated; chapters inherit the audiobook tier on create |
+| `CHAPTER` | per-chapter `minSubscriptionTier` | Audiobook detail is open; each chapter returns its own `subscriptionAccess` |
+
+Rules enforced by app-service:
+
+- **AUDIOBOOK gating:** `minSubscriptionTier` is set on the audiobook. New chapters inherit that tier. Client cannot set a different tier on chapters.
+- **CHAPTER gating:** each chapter requires an explicit `minSubscriptionTier` on create (`null` = free). Tiers must be **non-decreasing** by `chapterNumber` (e.g. free → BASE → STANDARD). Adjacent chapters may share the same tier. At most **two tier step-ups** across the audiobook. Tiers **cannot be reduced** on update.
+- User tier is resolved via `GET /auth/subscriptions/me/tier` with the same JWT. App-service and streaming-service both call this endpoint for LISTENER subscription gating on stream access.
+
+`GET /api/v1/audiobooks/:id` returns audiobook `subscriptionAccess`. Chapter list/detail includes per-chapter `subscriptionAccess`. Set `AUTH_SERVICE_URL` in app-service.
+
+### SSE cache invalidation
+
+| Event | Resource | When |
+|-------|----------|------|
+| User subscription tier changes | `subscription-catalog` | create/upgrade/cancel/renew with tier change (user-scoped via `relatedIds.userId`) |
+| Subscription plan tier definition changes | `subscription-gating` | plan create/update/delete in auth; relayed to app via RabbitMQ |
+| Audiobook/chapter gating config changes | `subscription-gating` | app-service when `subscriptionGatingMode` or `minSubscriptionTier` changes (includes chapter query keys via `relatedIds.audiobookId`) |
+
+Clients should `removeQueries` then `invalidateQueries` for each `queryKey`. Prefix key `['audiobooks']` covers chapter queries (`['audiobooks', id, 'chapters']`).

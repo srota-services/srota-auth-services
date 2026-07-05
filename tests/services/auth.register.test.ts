@@ -1,6 +1,7 @@
 import { Role } from '@prisma/client';
+import { attachPrismaTransaction } from '../helpers/prismaMock';
 
-const mockPrisma = {
+const mockPrisma = attachPrismaTransaction({
    user: {
       findUnique: jest.fn(),
       create: jest.fn(),
@@ -9,7 +10,7 @@ const mockPrisma = {
    refreshToken: {
       create: jest.fn(),
    },
-};
+});
 
 jest.mock('@prisma/client', () => ({
    PrismaClient: jest.fn(() => mockPrisma),
@@ -32,6 +33,18 @@ jest.mock('@prisma/client', () => ({
       SIZE_11_50: 'SIZE_11_50',
       SIZE_51_200: 'SIZE_51_200',
       SIZE_200_PLUS: 'SIZE_200_PLUS',
+   },
+   ReputationTierLevel: {
+      TIER_1: 'TIER_1',
+      TIER_2: 'TIER_2',
+      TIER_3: 'TIER_3',
+      TIER_4: 'TIER_4',
+      TIER_5: 'TIER_5',
+   },
+   ReviewerType: {
+      USER: 'USER',
+      AUTHOR: 'AUTHOR',
+      ORGANIZATION: 'ORGANIZATION',
    },
 }));
 
@@ -73,6 +86,14 @@ jest.mock('../../src/services/otp', () => ({
    },
 }));
 
+jest.mock('../../src/services/userProfile', () => ({
+   userProfileService: {
+      initializeUserProfile: jest.fn().mockResolvedValue({ id: 'user-1' }),
+      getUserProfile: jest.fn(),
+   },
+   toUserResponse: jest.fn((user) => user),
+}));
+
 jest.mock('../../src/services/userDevice', () => ({
    userDeviceService: {
       resolveDeviceForAuth: jest.fn().mockResolvedValue({ id: 'device-1' }),
@@ -86,6 +107,8 @@ jest.mock('../../src/services/AuthorService', () => ({
          userId: 'author-user-1',
          slug: 'jane-doe-abc12345',
       }),
+      applyAuthorAvatarFromSource: jest.fn().mockResolvedValue(undefined),
+      bootstrapDefaultAuthorTier: jest.fn().mockResolvedValue(undefined),
    })),
 }));
 
@@ -97,7 +120,8 @@ jest.mock('../../src/services/google-oauth', () => ({
 
 import { AuthService } from '../../src/services/auth';
 import { redisService } from '../../src/services/redis';
-import { rabbitmqService } from '../../src/services/rabbitmq';
+import { AuthorService } from '../../src/services/AuthorService';
+import { userProfileService } from '../../src/services/userProfile';
 import { userDeviceService } from '../../src/services/userDevice';
 
 describe('AuthService register/verify author flow', () => {
@@ -166,7 +190,7 @@ describe('AuthService register/verify author flow', () => {
       });
    });
 
-   test('should publish author.created after OTP verification for author users', async () => {
+   test('should bootstrap author tier after OTP verification for author users', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
          id: 'author-user-1',
          email: 'author@example.com',
@@ -195,11 +219,10 @@ describe('AuthService register/verify author flow', () => {
          device: { deviceId: 'device-1' },
       });
 
-      expect(rabbitmqService.publishAuthorCreated).toHaveBeenCalledWith({
-         authorId: 'author-1',
-         avatar: '/uploads/images/authors/image-1.jpg',
-      });
-      expect(rabbitmqService.publishUserCreated).not.toHaveBeenCalled();
+      const authorServiceInstance = (AuthorService as jest.Mock).mock.results[0]?.value as {
+         bootstrapDefaultAuthorTier: jest.Mock;
+      };
+      expect(authorServiceInstance.bootstrapDefaultAuthorTier).toHaveBeenCalledWith('author-1');
       expect(redisService.deletePendingAuthorRegistration).toHaveBeenCalledWith('author-user-1');
    });
 
@@ -279,10 +302,9 @@ describe('AuthService register/verify author flow', () => {
             }),
          }),
       );
-      expect(rabbitmqService.publishUserCreated).toHaveBeenCalledWith({
-         userId: 'user-1',
+      expect(userProfileService.initializeUserProfile).toHaveBeenCalledWith('user-1', {
+         avatar: 'uploads/images/users/avatar-1.jpg',
       });
-      expect(rabbitmqService.publishAuthorCreated).not.toHaveBeenCalled();
       expect(redisService.deletePendingUserRegistration).toHaveBeenCalledWith('user-1');
    });
 });

@@ -119,6 +119,11 @@ export interface GoogleOAuthRequest {
    device: DeviceContext;
 }
 
+export interface GuestAuthRequest {
+   clientType?: ClientTypeValue;
+   device: DeviceContext;
+}
+
 // Response interfaces
 export interface AuthResponse {
    accessToken: string;
@@ -144,8 +149,19 @@ export interface UserResponse {
    gender?: Gender;
    location?: string;
    age?: number;
+   username?: string;
+   avatar?: string;
+   preferences?: Record<string, unknown>;
+   imageAssets?: Record<string, string>;
    createdAt: Date;
    updatedAt: Date;
+}
+
+export interface PublicUserProfileResponse {
+   userId: string;
+   username: string;
+   avatar?: string;
+   imageAssets?: Record<string, string>;
 }
 
 export interface LocationCoordinatesInput {
@@ -161,6 +177,9 @@ export interface UpdateUserProfileRequest {
    gender?: Gender | null;
    location?: LocationCoordinatesInput | null;
    age?: number | null;
+   username?: string;
+   avatar?: string | null;
+   preferences?: Record<string, unknown> | null;
 }
 
 // Error classes

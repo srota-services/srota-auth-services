@@ -18,9 +18,17 @@ export interface OrganizationDto {
    preferredGenre?: string | null;
    websiteUrl?: string | null;
    teamSize?: OrganizationTeamSizeType | null;
+   discoverable?: boolean;
    createdAt: Date;
    updatedAt: Date;
    memberCount?: number | undefined;
+}
+
+export interface OrganizationMemberUserSummary {
+   email: string;
+   firstName?: string | null;
+   lastName?: string | null;
+   contact?: string | null;
 }
 
 export interface OrganizationMemberDto {
@@ -31,6 +39,7 @@ export interface OrganizationMemberDto {
    joinedAt: Date;
    createdAt: Date;
    updatedAt: Date;
+   user?: OrganizationMemberUserSummary;
    organization?: OrganizationDto | undefined;
 }
 
@@ -41,6 +50,7 @@ export interface CreateOrganizationDto {
    preferredGenre?: string | null;
    websiteUrl?: string | null;
    teamSize?: OrganizationTeamSizeType | null;
+   discoverable?: boolean;
 }
 
 export interface UpdateOrganizationDto {
@@ -50,6 +60,7 @@ export interface UpdateOrganizationDto {
    preferredGenre?: string | null;
    websiteUrl?: string | null;
    teamSize?: OrganizationTeamSizeType | null;
+   discoverable?: boolean;
 }
 
 export interface AddOrganizationMemberDto {
@@ -110,6 +121,7 @@ export function toOrganizationDto(organization: OrganizationRecord): Organizatio
       preferredGenre: organization.preferredGenre ?? null,
       websiteUrl: organization.websiteUrl ?? null,
       teamSize: teamSizeToApi(organization.teamSize),
+      discoverable: organization.discoverable,
       createdAt: organization.createdAt,
       updatedAt: organization.updatedAt,
       memberCount: organization._count?.members,
@@ -119,6 +131,7 @@ export function toOrganizationDto(organization: OrganizationRecord): Organizatio
 export function toOrganizationMemberDto(
    member: PrismaOrganizationMember & {
       organization?: PrismaOrganization;
+      user?: OrganizationMemberUserSummary;
    },
 ): OrganizationMemberDto {
    return {
@@ -129,6 +142,16 @@ export function toOrganizationMemberDto(
       joinedAt: member.joinedAt,
       createdAt: member.createdAt,
       updatedAt: member.updatedAt,
+      ...(member.user
+         ? {
+              user: {
+                 email: member.user.email,
+                 firstName: member.user.firstName ?? null,
+                 lastName: member.user.lastName ?? null,
+                 contact: member.user.contact ?? null,
+              },
+           }
+         : {}),
       organization: member.organization ? toOrganizationDto(member.organization) : undefined,
    };
 }

@@ -13,9 +13,12 @@ import { DomainError } from '../types/domain';
 import { domainMessages } from '../utils/domainMessages';
 import { fileUrlService } from './FileUrlService';
 import { generateOrganizationSlug } from '../utils/slug';
+import { runInTransaction, runWrite } from '../utils/prismaTransaction';
+import { rethrowServiceError } from '../utils/serviceError';
 import { rabbitmqService } from './rabbitmq';
 import { mediaCleanupService } from './MediaCleanupService';
 import { ImageAssetService } from './ImageAssetService';
+import { OrganizationTierService } from './OrganizationTierService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
 import {
    AuthRole,
@@ -59,9 +62,11 @@ export function hasOrgStaffAccess(
 
 export class OrganizationService {
    private imageAssetService: ImageAssetService;
+   private organizationTierService: OrganizationTierService;
 
    constructor(private prisma: PrismaClient) {
       this.imageAssetService = new ImageAssetService(prisma);
+      this.organizationTierService = new OrganizationTierService(prisma);
    }
 
    async createOrganization(
@@ -82,7 +87,7 @@ export class OrganizationService {
       const teamSize = this.normalizeTeamSize(data.teamSize);
 
       try {
-         const organization = await this.prisma.$transaction(async (tx) => {
+         const organization = await runInTransaction(this.prisma, async (tx) => {
             const slug = await generateOrganizationSlug(tx as PrismaClient, name);
 
             const created = await tx.organization.create({
@@ -94,6 +99,7 @@ export class OrganizationService {
                   preferredGenre,
                   websiteUrl,
                   teamSize,
+                  discoverable: data.discoverable ?? false,
                },
             });
 
@@ -110,16 +116,20 @@ export class OrganizationService {
             return created;
          });
 
+         await this.organizationTierService.createDefaultForOrganization(organization.id);
+
          if (imageSourcePath) {
             const { primaryStorageKey } = await this.imageAssetService.generateAndStoreVariants(
                'organization',
                organization.id,
                imageSourcePath,
             );
-            const updated = await this.prisma.organization.update({
-               where: { id: organization.id },
-               data: { image: primaryStorageKey },
-            });
+            const updated = await runWrite(this.prisma, (tx) =>
+               tx.organization.update({
+                  where: { id: organization.id },
+                  data: { image: primaryStorageKey },
+               }),
+            );
             emitCacheInvalidation('organization', 'created', organization.id);
             return fileUrlService.resolveOrganizationMedia(toOrganizationDto(updated));
          }
@@ -127,13 +137,38 @@ export class OrganizationService {
          emitCacheInvalidation('organization', 'created', organization.id);
          return fileUrlService.resolveOrganizationMedia(toOrganizationDto(organization));
       } catch (error) {
-         if (error instanceof DomainError) {
-            throw error;
-         }
-         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-            throw DomainError.conflict(msg.slug_exists);
-         }
-         throw DomainError.internal(msg.create_failed);
+         rethrowServiceError(error, { operation: 'createOrganization' }, msg.create_failed);
+      }
+   }
+
+   async listDiscoverableOrganizations(params: { page?: number; limit?: number } = {}): Promise<{
+      organizations: OrganizationDto[];
+      totalCount: number;
+   }> {
+      const page = Math.max(1, params.page ?? 1);
+      const limit = Math.min(100, Math.max(1, params.limit ?? 10));
+      const skip = (page - 1) * limit;
+
+      try {
+         const where = { discoverable: true };
+         const [organizations, totalCount] = await Promise.all([
+            this.prisma.organization.findMany({
+               where,
+               skip,
+               take: limit,
+               orderBy: { name: 'asc' },
+               include: { _count: { select: { members: true } } },
+            }),
+            this.prisma.organization.count({ where }),
+         ]);
+
+         const dtos = organizations.map(toOrganizationDto);
+         return {
+            organizations: await fileUrlService.resolveOrganizationMediaList(dtos),
+            totalCount,
+         };
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'listDiscoverableOrganizations' }, msg.fetch_failed);
       }
    }
 
@@ -161,8 +196,8 @@ export class OrganizationService {
             organizations: await fileUrlService.resolveOrganizationMediaList(dtos),
             totalCount,
          };
-      } catch {
-         throw DomainError.internal(msg.fetch_failed);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'listOrganizations' }, msg.fetch_failed);
       }
    }
 
@@ -183,8 +218,8 @@ export class OrganizationService {
                return { ...member, organization };
             }),
          );
-      } catch {
-         throw DomainError.internal(msg.fetch_failed);
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'getOrganizationsForUser' }, msg.fetch_failed);
       }
    }
 
@@ -199,10 +234,7 @@ export class OrganizationService {
          }
          return fileUrlService.resolveOrganizationMedia(toOrganizationDto(organization));
       } catch (error) {
-         if (error instanceof DomainError) {
-            throw error;
-         }
-         throw DomainError.internal(msg.fetch_failed);
+         rethrowServiceError(error, { operation: 'getOrganizationById' }, msg.fetch_failed);
       }
    }
 
@@ -255,6 +287,10 @@ export class OrganizationService {
          updates.teamSize = this.normalizeTeamSize(data.teamSize);
       }
 
+      if (data.discoverable !== undefined) {
+         updates.discoverable = data.discoverable;
+      }
+
       if (Object.keys(updates).length === 0 && !imageSourcePath) {
          throw DomainError.validation(domainMessages.error.validation.no_update_fields);
       }
@@ -267,10 +303,12 @@ export class OrganizationService {
 
          let updated = existing;
          if (Object.keys(updates).length > 0) {
-            updated = await this.prisma.organization.update({
-               where: { id },
-               data: updates,
-            });
+            updated = await runWrite(this.prisma, (tx) =>
+               tx.organization.update({
+                  where: { id },
+                  data: updates,
+               }),
+            );
          }
 
          if (imageSourcePath) {
@@ -279,10 +317,12 @@ export class OrganizationService {
                id,
                imageSourcePath,
             );
-            updated = await this.prisma.organization.update({
-               where: { id },
-               data: { image: primaryStorageKey },
-            });
+            updated = await runWrite(this.prisma, (tx) =>
+               tx.organization.update({
+                  where: { id },
+                  data: { image: primaryStorageKey },
+               }),
+            );
          } else if (data.image !== undefined && data.image !== existing.image) {
             await this.imageAssetService.deleteAssetsForEntity('organization', id);
             await mediaCleanupService.deleteStoredFile(existing.image);
@@ -291,10 +331,7 @@ export class OrganizationService {
          emitCacheInvalidation('organization', 'updated', id);
          return fileUrlService.resolveOrganizationMedia(toOrganizationDto(updated));
       } catch (error) {
-         if (error instanceof DomainError) {
-            throw error;
-         }
-         throw DomainError.internal(msg.update_failed);
+         rethrowServiceError(error, { operation: 'updateOrganization' }, msg.update_failed);
       }
    }
 
@@ -307,7 +344,7 @@ export class OrganizationService {
 
          const orgImage = existing.image;
          await this.imageAssetService.deleteAssetsForEntity('organization', id);
-         await this.prisma.organization.delete({ where: { id } });
+         await runWrite(this.prisma, (tx) => tx.organization.delete({ where: { id } }));
 
          try {
             await rabbitmqService.publishOrganizationDeleted({ organizationId: id });
@@ -318,10 +355,7 @@ export class OrganizationService {
          await mediaCleanupService.deleteStoredFile(orgImage);
          emitCacheInvalidation('organization', 'deleted', id);
       } catch (error) {
-         if (error instanceof DomainError) {
-            throw error;
-         }
-         throw DomainError.internal(msg.delete_failed);
+         rethrowServiceError(error, { operation: 'deleteOrganization' }, msg.delete_failed);
       }
    }
 
@@ -380,10 +414,12 @@ export class OrganizationService {
             throw DomainError.conflict(msg.member_exists);
          }
 
-         const member = await this.prisma.organizationMember.create({
-            data: { organizationId, userId, role },
-            include: { organization: true },
-         });
+         const member = await runWrite(this.prisma, (tx) =>
+            tx.organizationMember.create({
+               data: { organizationId, userId, role },
+               include: { organization: true },
+            }),
+         );
 
          const dto = toOrganizationMemberDto(member);
          if (dto.organization) {
@@ -392,13 +428,7 @@ export class OrganizationService {
          emitCacheInvalidation('organization-member', 'created', member.id, { organizationId });
          return dto;
       } catch (error) {
-         if (error instanceof DomainError) {
-            throw error;
-         }
-         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-            throw DomainError.conflict(msg.member_exists);
-         }
-         throw DomainError.internal(msg.add_member_failed);
+         rethrowServiceError(error, { operation: 'addMember' }, msg.add_member_failed);
       }
    }
 
@@ -412,15 +442,22 @@ export class OrganizationService {
          }
          const members = await this.prisma.organizationMember.findMany({
             where: { organizationId },
-            include: { organization: true },
+            include: {
+               organization: true,
+               user: {
+                  select: {
+                     email: true,
+                     firstName: true,
+                     lastName: true,
+                     contact: true,
+                  },
+               },
+            },
             orderBy: { joinedAt: 'asc' },
          });
          return members.map(toOrganizationMemberDto);
       } catch (error) {
-         if (error instanceof DomainError) {
-            throw error;
-         }
-         throw DomainError.internal(msg.fetch_members_failed);
+         rethrowServiceError(error, { operation: 'listMembers' }, msg.fetch_members_failed);
       }
    }
 
@@ -448,11 +485,13 @@ export class OrganizationService {
             }
          }
 
-         const updated = await this.prisma.organizationMember.update({
-            where: { userId_organizationId: { userId, organizationId } },
-            data: { role },
-            include: { organization: true },
-         });
+         const updated = await runWrite(this.prisma, (tx) =>
+            tx.organizationMember.update({
+               where: { userId_organizationId: { userId, organizationId } },
+               data: { role },
+               include: { organization: true },
+            }),
+         );
 
          const dto = toOrganizationMemberDto(updated);
          if (dto.organization) {
@@ -461,10 +500,7 @@ export class OrganizationService {
          emitCacheInvalidation('organization-member', 'updated', updated.id, { organizationId });
          return dto;
       } catch (error) {
-         if (error instanceof DomainError) {
-            throw error;
-         }
-         throw DomainError.internal(msg.update_member_failed);
+         rethrowServiceError(error, { operation: 'updateMemberRole' }, msg.update_member_failed);
       }
    }
 
@@ -486,15 +522,14 @@ export class OrganizationService {
             }
          }
 
-         await this.prisma.organizationMember.delete({
-            where: { userId_organizationId: { userId, organizationId } },
-         });
+         await runWrite(this.prisma, (tx) =>
+            tx.organizationMember.delete({
+               where: { userId_organizationId: { userId, organizationId } },
+            }),
+         );
          emitCacheInvalidation('organization-member', 'deleted', member.id, { organizationId });
       } catch (error) {
-         if (error instanceof DomainError) {
-            throw error;
-         }
-         throw DomainError.internal(msg.remove_member_failed);
+         rethrowServiceError(error, { operation: 'removeMember' }, msg.remove_member_failed);
       }
    }
 

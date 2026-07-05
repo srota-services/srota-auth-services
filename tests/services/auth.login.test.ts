@@ -1,13 +1,14 @@
 import { Role } from '@prisma/client';
+import { attachPrismaTransaction } from '../helpers/prismaMock';
 
-const mockPrisma = {
+const mockPrisma = attachPrismaTransaction({
    user: {
       findUnique: jest.fn(),
    },
    refreshToken: {
       create: jest.fn(),
    },
-};
+});
 
 jest.mock('@prisma/client', () => ({
    PrismaClient: jest.fn(() => mockPrisma),
@@ -28,6 +29,18 @@ jest.mock('@prisma/client', () => ({
       SIZE_11_50: 'SIZE_11_50',
       SIZE_51_200: 'SIZE_51_200',
       SIZE_200_PLUS: 'SIZE_200_PLUS',
+   },
+   ReputationTierLevel: {
+      TIER_1: 'TIER_1',
+      TIER_2: 'TIER_2',
+      TIER_3: 'TIER_3',
+      TIER_4: 'TIER_4',
+      TIER_5: 'TIER_5',
+   },
+   ReviewerType: {
+      USER: 'USER',
+      AUTHOR: 'AUTHOR',
+      ORGANIZATION: 'ORGANIZATION',
    },
 }));
 

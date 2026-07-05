@@ -1,5 +1,7 @@
-import { SubscriptionPlan as PrismaSubscriptionPlan, BillingInterval } from '@prisma/client';
+import { SubscriptionPlan as PrismaSubscriptionPlan, BillingInterval, SubscriptionTierLevel } from '@prisma/client';
 import { formatSubscriptionPlanFeatures } from '../utils/formatSubscriptionPlanFeatures';
+
+export { SubscriptionTierLevel };
 
 export interface SubscriptionPlanDto {
    id: string;
@@ -7,7 +9,7 @@ export interface SubscriptionPlanDto {
    description: string | null;
    price: number;
    currency: string;
-   tierLevel: number;
+   tierLevel: SubscriptionTierLevel;
    billingInterval: BillingInterval;
    trialDays: number;
    /** Raw feature flags stored in the database */
@@ -24,7 +26,7 @@ export interface CreateSubscriptionPlanDto {
    description?: string;
    price: number;
    currency?: string;
-   tierLevel?: number;
+   tierLevel: SubscriptionTierLevel;
    billingInterval?: BillingInterval;
    trialDays?: number;
    features?: unknown;
@@ -36,7 +38,7 @@ export interface UpdateSubscriptionPlanDto {
    description?: string | null;
    price?: number;
    currency?: string;
-   tierLevel?: number;
+   tierLevel?: SubscriptionTierLevel;
    billingInterval?: BillingInterval;
    trialDays?: number;
    features?: unknown;

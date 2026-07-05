@@ -6,8 +6,14 @@ export type AuthDomainResource =
    | 'author'
    | 'organization'
    | 'organization-member'
+   | 'author-organization-invitation'
+   | 'author-organization-collaboration'
+   | 'organization-review'
+   | 'author-review'
    | 'subscription-plan'
    | 'user-subscription'
+   | 'subscription-catalog'
+   | 'subscription-gating'
    | 'user-device';
 
 export interface CacheInvalidateEvent {

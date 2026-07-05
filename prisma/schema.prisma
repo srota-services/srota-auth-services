@@ -16,6 +16,7 @@ enum Role {
    ORG_ADMIN
    ORG_COORDINATOR
    AUTHOR
+   GUEST
 }
 
 enum OtpPurpose {
@@ -57,6 +58,9 @@ model User {
    gender        Gender?
    location      String?
    age           Int?
+   username      String?  @unique
+   avatar        String?
+   preferences   Json?
    createdAt     DateTime @default(now())
    updatedAt     DateTime @updatedAt
 
@@ -144,6 +148,12 @@ enum BillingEventType {
    PLAN_CHANGE_SCHEDULED
 }
 
+enum SubscriptionTierLevel {
+   BASE
+   STANDARD
+   PREMIUM
+}
+
 model SubscriptionPlan {
    id          String  @id @default(cuid())
    name        String  @unique
@@ -152,7 +162,7 @@ model SubscriptionPlan {
    price    Decimal @db.Decimal(10, 2)
    currency String  @default("USD")
 
-   tierLevel Int @default(0)
+   tierLevel SubscriptionTierLevel
 
    billingInterval BillingInterval @default(MONTHLY)
    trialDays       Int             @default(0)
@@ -319,6 +329,28 @@ enum OrganizationTeamSize {
    SIZE_200_PLUS @map("200+")
 }
 
+enum AuthorOrganizationInvitationStatus {
+   PENDING_CONTACT_CONSENT
+   AWAITING_ORG_CONTACT
+   AWAITING_JOIN_DECISION
+   DECLINED
+   ACCEPTED
+}
+
+enum ReputationTierLevel {
+   TIER_1
+   TIER_2
+   TIER_3
+   TIER_4
+   TIER_5
+}
+
+enum ReviewerType {
+   USER
+   AUTHOR
+   ORGANIZATION
+}
+
 model Organization {
    id             String                @id @default(cuid())
    name           String
@@ -328,28 +360,97 @@ model Organization {
    preferredGenre String?
    websiteUrl     String?
    teamSize       OrganizationTeamSize?
+   discoverable   Boolean               @default(false)
 
    createdAt DateTime @default(now())
    updatedAt DateTime @updatedAt
 
    members OrganizationMember[]
    authors AuthorOrganization[]
+   authorInvitations AuthorOrganizationInvitation[]
+   authorCollaborations AuthorOrganizationCollaboration[]
+   tier     OrganizationTier?
+   reviews  OrganizationReview[]
 
    @@map("organizations")
 }
 
 model Author {
-   id     String @id @default(cuid())
-   userId String @unique
-   slug   String @unique
+   id           String  @id @default(cuid())
+   userId       String  @unique
+   slug         String  @unique
+   avatar       String?
+   discoverable Boolean @default(false)
 
    createdAt DateTime @default(now())
    updatedAt DateTime @updatedAt
 
    user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
    organizations AuthorOrganization[]
+   organizationInvitations AuthorOrganizationInvitation[]
+   organizationCollaborations AuthorOrganizationCollaboration[]
+   tier     AuthorTier?
+   reviews  AuthorReview[]
 
    @@map("authors")
+}
+
+model OrganizationTier {
+   id             String              @id @default(cuid())
+   organizationId String              @unique
+   tier           ReputationTierLevel @default(TIER_3)
+   createdAt      DateTime            @default(now())
+   updatedAt      DateTime            @updatedAt
+
+   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+   @@map("organization_tiers")
+}
+
+model AuthorTier {
+   id        String              @id @default(cuid())
+   authorId  String              @unique
+   tier      ReputationTierLevel @default(TIER_3)
+   createdAt DateTime            @default(now())
+   updatedAt DateTime            @updatedAt
+
+   author Author @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+   @@map("author_tiers")
+}
+
+model OrganizationReview {
+   id             String       @id @default(cuid())
+   organizationId String
+   reviewerType   ReviewerType
+   reviewerId     String
+   rating         Int
+   description    String?
+   createdAt      DateTime     @default(now())
+   updatedAt      DateTime     @updatedAt
+
+   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+   @@unique([organizationId, reviewerType, reviewerId])
+   @@index([organizationId])
+   @@map("organization_reviews")
+}
+
+model AuthorReview {
+   id           String       @id @default(cuid())
+   authorId     String
+   reviewerType ReviewerType
+   reviewerId   String
+   rating       Int
+   description  String?
+   createdAt    DateTime     @default(now())
+   updatedAt    DateTime     @updatedAt
+
+   author Author @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+   @@unique([authorId, reviewerType, reviewerId])
+   @@index([authorId])
+   @@map("author_reviews")
 }
 
 model AuthorOrganization {
@@ -364,6 +465,103 @@ model AuthorOrganization {
 
    @@unique([authorId, organizationId])
    @@map("author_organizations")
+}
+
+model AuthorOrganizationInvitation {
+   id                    String                             @id @default(cuid())
+   organizationId        String
+   authorId              String
+   status                AuthorOrganizationInvitationStatus
+   contactRevealedAt     DateTime?
+   orgContactConfirmedAt DateTime?
+   respondedAt           DateTime?
+   createdAt             DateTime                           @default(now())
+   updatedAt             DateTime                           @updatedAt
+
+   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+   author       Author       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+   @@unique([organizationId, authorId])
+   @@index([authorId, status])
+   @@index([organizationId, status])
+   @@map("author_organization_invitations")
+}
+
+enum AuthorOrganizationCollaborationStatus {
+   PENDING_ORG_REVIEW
+   NEGOTIATION
+   ACCEPTED
+   REJECTED
+   ABORTED
+}
+
+enum CollaborationActor {
+   AUTHOR
+   ORGANIZATION
+}
+
+enum CollaborationTurn {
+   AUTHOR
+   ORGANIZATION
+}
+
+model AuthorOrganizationCollaboration {
+   id                   String                              @id @default(cuid())
+   organizationId       String
+   authorId             String
+   description          String?
+   authorBudget         Decimal                             @db.Decimal(12, 2)
+   organizationAsk      Decimal?                            @db.Decimal(12, 2)
+   acceptedBudget       Decimal?                            @db.Decimal(12, 2)
+   currency             String
+   status               AuthorOrganizationCollaborationStatus
+   turn                 CollaborationTurn
+   negotiationExpiresAt DateTime?
+   rejectedAt           DateTime?
+   acceptedAt           DateTime?
+   abortedAt            DateTime?
+   createdAt            DateTime                            @default(now())
+   updatedAt            DateTime                            @updatedAt
+
+   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+   author       Author       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+   attachments  AuthorOrganizationCollaborationAttachment[]
+   rounds       AuthorOrganizationCollaborationRound[]
+
+   @@unique([authorId, organizationId])
+   @@index([organizationId, status])
+   @@index([authorId, status])
+   @@map("author_organization_collaborations")
+}
+
+model AuthorOrganizationCollaborationAttachment {
+   id              String             @id @default(cuid())
+   collaborationId String
+   storageKey      String
+   originalName    String
+   mimeType        String
+   sizeBytes       Int
+   uploadedBy      CollaborationActor
+   createdAt       DateTime           @default(now())
+
+   collaboration AuthorOrganizationCollaboration @relation(fields: [collaborationId], references: [id], onDelete: Cascade, map: "author_organization_collaboration_attachments_collaboratio_fkey")
+
+   @@index([collaborationId], map: "author_organization_collaboration_attachments_collaboration_idx")
+   @@map("author_organization_collaboration_attachments")
+}
+
+model AuthorOrganizationCollaborationRound {
+   id              String             @id @default(cuid())
+   collaborationId String
+   actor           CollaborationActor
+   authorBudget    Decimal?           @db.Decimal(12, 2)
+   organizationAsk Decimal?           @db.Decimal(12, 2)
+   createdAt       DateTime           @default(now())
+
+   collaboration AuthorOrganizationCollaboration @relation(fields: [collaborationId], references: [id], onDelete: Cascade)
+
+   @@index([collaborationId])
+   @@map("author_organization_collaboration_rounds")
 }
 
 model OrganizationMember {
@@ -386,6 +584,8 @@ model OrganizationMember {
 
 enum ImageCategory {
    organization
+   author
+   user
 }
 
 model ImagePlaceholderSpec {
