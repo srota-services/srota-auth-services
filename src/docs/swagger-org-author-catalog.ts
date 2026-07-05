@@ -604,6 +604,8 @@
  *     responses:
  *       201:
  *         description: Collaboration request created
+ *       403:
+ *         description: Organization is not discoverable and does not accept collaboration requests
  *   get:
  *     summary: List my organization collaboration requests
  *     tags: [AuthorCollaborations]

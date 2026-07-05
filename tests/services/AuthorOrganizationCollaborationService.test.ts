@@ -84,7 +84,7 @@ describe('AuthorOrganizationCollaborationService', () => {
       service = new AuthorOrganizationCollaborationService(mockPrisma);
       jest.clearAllMocks();
       lastCollaboration = { ...baseCollaboration };
-      mockPrisma.organization.findUnique.mockResolvedValue({ id: 'org-1' });
+      mockPrisma.organization.findUnique.mockResolvedValue({ id: 'org-1', discoverable: true });
       mockPrisma.author.findUnique.mockResolvedValue({ id: 'author-1' });
       mockPrisma.authorOrganization.findUnique.mockResolvedValue(null);
       mockPrisma.authorOrganizationInvitation.findUnique.mockResolvedValue(null);
@@ -111,6 +111,14 @@ describe('AuthorOrganizationCollaborationService', () => {
       mockPrisma.authorOrganization.create.mockResolvedValue({});
       mockPrisma.$transaction.mockImplementation((fn: (tx: typeof mockPrisma) => Promise<unknown>) =>
          fn(mockPrisma),
+      );
+   });
+
+   it('rejects collaboration requests to non-discoverable organizations', async () => {
+      mockPrisma.organization.findUnique.mockResolvedValue({ id: 'org-1', discoverable: false });
+
+      await expect(service.createRequest('user-1', 'org-1', undefined, 1000, 'USD')).rejects.toBeInstanceOf(
+         DomainError,
       );
    });
 

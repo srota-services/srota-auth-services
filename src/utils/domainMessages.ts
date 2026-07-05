@@ -95,6 +95,7 @@ export const domainMessages = {
          budget_precision_invalid: 'Budget must have at most 2 decimal places',
          currency_invalid: 'Currency must be a valid 3-letter ISO code',
          organization_id_required: 'Organization ID is required',
+         organization_not_discoverable: 'This organization is not accepting collaboration requests',
       },
       validation: {
          no_update_fields: 'At least one field must be provided for update',

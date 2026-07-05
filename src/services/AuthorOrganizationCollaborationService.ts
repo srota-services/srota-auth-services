@@ -57,10 +57,13 @@ export class AuthorOrganizationCollaborationService {
 
       const organization = await this.prisma.organization.findUnique({
          where: { id: organizationId },
-         select: { id: true },
+         select: { id: true, discoverable: true },
       });
       if (!organization) {
          throw DomainError.notFound(domainMessages.error.organizations.not_found);
+      }
+      if (!organization.discoverable) {
+         throw DomainError.forbidden(msg.organization_not_discoverable);
       }
 
       await assertNoActiveAuthorOrgLinkRequest(this.prisma, author.id, organizationId);
