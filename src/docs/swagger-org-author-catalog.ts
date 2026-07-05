@@ -147,6 +147,28 @@
  *     responses:
  *       200:
  *         description: Member list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string }
+ *                 members:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/OrganizationMember' }
+ *             example:
+ *               message: "Organization members retrieved successfully"
+ *               members:
+ *                 - id: "cmember1234567890abcdefgh"
+ *                   userId: "cuser1234567890abcdefghij"
+ *                   organizationId: "corg1234567890abcdefghij"
+ *                   role: "OWNER"
+ *                   joinedAt: "2026-01-01T00:00:00.000Z"
+ *                   user:
+ *                     email: "jane@example.com"
+ *                     firstName: "Jane"
+ *                     lastName: "Doe"
+ *                     contact: "+15551234567"
  *   post:
  *     summary: Add organization member
  *     tags: [Organizations]

@@ -416,7 +416,17 @@ export class OrganizationService {
          }
          const members = await this.prisma.organizationMember.findMany({
             where: { organizationId },
-            include: { organization: true },
+            include: {
+               organization: true,
+               user: {
+                  select: {
+                     email: true,
+                     firstName: true,
+                     lastName: true,
+                     contact: true,
+                  },
+               },
+            },
             orderBy: { joinedAt: 'asc' },
          });
          return members.map(toOrganizationMemberDto);

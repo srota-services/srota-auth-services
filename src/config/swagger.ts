@@ -283,6 +283,15 @@ const options: swaggerJsdoc.Options = {
                   organizationId: { type: 'string' },
                   role: { type: 'string', enum: ['OWNER', 'ADMIN', 'MEMBER'] },
                   joinedAt: { type: 'string', format: 'date-time' },
+                  user: {
+                     type: 'object',
+                     properties: {
+                        email: { type: 'string', example: 'jane@example.com' },
+                        firstName: { type: 'string', nullable: true, example: 'Jane' },
+                        lastName: { type: 'string', nullable: true, example: 'Doe' },
+                        contact: { type: 'string', nullable: true, example: '+15551234567' },
+                     },
+                  },
                },
             },
             SubscriptionPlan: {
