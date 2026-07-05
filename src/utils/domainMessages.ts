@@ -30,6 +30,15 @@ export const domainMessages = {
          declined: 'Invitation declined',
          joined: 'You have joined the organization',
       },
+      authorCollaborations: {
+         created: 'Collaboration request submitted successfully',
+         retrieved: 'Collaboration requests retrieved successfully',
+         countered: 'Budget counter submitted successfully',
+         aborted: 'Collaboration request aborted',
+         accepted: 'Collaboration request accepted',
+         rejected: 'Collaboration request rejected',
+         negotiated: 'Negotiation terms submitted successfully',
+      },
    },
    error: {
       organizations: {
@@ -74,6 +83,19 @@ export const domainMessages = {
          author_already_linked: 'Author is already linked to this organization',
          invalid_status: 'This invitation step is not available in the current state',
          access_denied: 'You do not have access to this invitation',
+      },
+      authorCollaborations: {
+         not_found: 'Collaboration request not found',
+         collaboration_already_pending: 'An active collaboration request already exists for this organization',
+         rejection_cooldown_active: 'You must wait 30 days after a rejection before submitting another request',
+         invalid_status: 'This collaboration action is not available in the current state',
+         not_your_turn: 'It is not your turn to act on this collaboration request',
+         access_denied: 'You do not have access to this collaboration request',
+         budget_invalid: 'Budget must be a positive number',
+         budget_precision_invalid: 'Budget must have at most 2 decimal places',
+         currency_invalid: 'Currency must be a valid 3-letter ISO code',
+         organization_id_required: 'Organization ID is required',
+         organization_not_discoverable: 'This organization is not accepting collaboration requests',
       },
       validation: {
          no_update_fields: 'At least one field must be provided for update',

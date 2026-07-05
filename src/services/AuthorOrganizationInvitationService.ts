@@ -15,6 +15,7 @@ import { DomainError } from '../types/domain';
 import { domainMessages } from '../utils/domainMessages';
 import { OrganizationService } from './OrganizationService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { assertNoActiveAuthorOrgLinkRequest } from '../utils/assertNoActiveAuthorOrgLinkRequest';
 
 const msg = domainMessages.error.authorInvitations;
 const successMsg = domainMessages.success.authorInvitations;
@@ -62,6 +63,8 @@ export class AuthorOrganizationInvitationService {
       if (alreadyLinked) {
          throw DomainError.conflict(msg.author_already_linked);
       }
+
+      await assertNoActiveAuthorOrgLinkRequest(this.prisma, authorId, organizationId);
 
       const existingInvitation = await this.prisma.authorOrganizationInvitation.findUnique({
          where: {

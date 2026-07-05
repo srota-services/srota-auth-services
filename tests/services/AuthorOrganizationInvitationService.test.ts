@@ -54,8 +54,12 @@ const mockPrisma = {
       findUnique: jest.fn(),
    },
    authorOrganization: {
+      findUnique: jest.fn(),
       findMany: jest.fn(),
       create: jest.fn(),
+   },
+   authorOrganizationCollaboration: {
+      findUnique: jest.fn(),
    },
    authorOrganizationInvitation: {
       findUnique: jest.fn(),
@@ -119,13 +123,17 @@ describe('AuthorOrganizationInvitationService', () => {
       mockPrisma.authorOrganizationInvitation.findMany.mockReset();
       mockPrisma.authorOrganizationInvitation.upsert.mockReset();
       mockPrisma.authorOrganizationInvitation.update.mockReset();
+      mockPrisma.authorOrganization.findUnique.mockReset();
       mockPrisma.authorOrganization.findMany.mockReset();
       mockPrisma.authorOrganization.create.mockReset();
+      mockPrisma.authorOrganizationCollaboration.findUnique.mockReset();
       mockPrisma.$transaction.mockImplementation((fn: (tx: typeof mockPrisma) => Promise<unknown>) =>
          fn(mockPrisma),
       );
       mockPrisma.organization.findUnique.mockResolvedValue({ id: 'org-1' });
       mockPrisma.author.findUnique.mockResolvedValue({ id: 'author-1' });
+      mockPrisma.authorOrganization.findUnique.mockResolvedValue(null);
+      mockPrisma.authorOrganizationCollaboration.findUnique.mockResolvedValue(null);
    });
 
    it('creates invitation in pending contact consent state', async () => {

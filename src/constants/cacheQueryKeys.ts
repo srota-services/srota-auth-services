@@ -57,6 +57,23 @@ function keysForResource(
          keys.push(['authors', 'me', 'organization-invitations']);
          return keys;
       }
+      case 'author-organization-collaboration': {
+         const orgId = relatedIds['organizationId'];
+         const authorId = relatedIds['authorId'];
+         const keys: string[][] = [['author-organization-collaborations']];
+         if (orgId) {
+            keys.push(
+               ['organizations', orgId, 'author-collaborations'],
+               ['organizations', orgId, 'authors'],
+               ['organizations', orgId],
+            );
+         }
+         if (authorId) {
+            keys.push(['authors', authorId, 'organization-collaborations']);
+         }
+         keys.push(['authors', 'me', 'organization-collaborations']);
+         return keys;
+      }
       case 'subscription-plan':
          return [['subscription-plans'], ['subscription-plans', id]];
       case 'user-subscription':

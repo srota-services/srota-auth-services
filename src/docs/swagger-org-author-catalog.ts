@@ -587,4 +587,165 @@
  *         $ref: '#/components/responses/NotFound'
  */
 
+/**
+ * @swagger
+ * /auth/authors/me/organization-collaborations:
+ *   post:
+ *     summary: Submit a collaboration request to an organization
+ *     tags: [AuthorCollaborations]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateAuthorOrganizationCollaborationRequest'
+ *     responses:
+ *       201:
+ *         description: Collaboration request created
+ *       403:
+ *         description: Organization is not discoverable and does not accept collaboration requests
+ *   get:
+ *     summary: List my organization collaboration requests
+ *     tags: [AuthorCollaborations]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Collaboration requests retrieved
+ */
+
+/**
+ * @swagger
+ * /auth/authors/me/organization-collaborations/{collaborationId}/counter:
+ *   patch:
+ *     summary: Counter with a new author budget during negotiation
+ *     tags: [AuthorCollaborations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: collaborationId
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CounterCollaborationBudgetRequest'
+ *     responses:
+ *       200:
+ *         description: Budget counter submitted
+ */
+
+/**
+ * @swagger
+ * /auth/authors/me/organization-collaborations/{collaborationId}/abort:
+ *   patch:
+ *     summary: Abort a collaboration request
+ *     tags: [AuthorCollaborations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: collaborationId
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Collaboration request aborted
+ */
+
+/**
+ * @swagger
+ * /auth/organizations/{organizationId}/author-collaborations:
+ *   get:
+ *     summary: List collaboration requests for an organization
+ *     tags: [AuthorCollaborations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: organizationId
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Collaboration requests retrieved
+ */
+
+/**
+ * @swagger
+ * /auth/organizations/{organizationId}/author-collaborations/{collaborationId}/accept:
+ *   patch:
+ *     summary: Accept a collaboration request
+ *     tags: [AuthorCollaborations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: organizationId
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *       - name: collaborationId
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Collaboration accepted
+ */
+
+/**
+ * @swagger
+ * /auth/organizations/{organizationId}/author-collaborations/{collaborationId}/reject:
+ *   patch:
+ *     summary: Reject a collaboration request
+ *     tags: [AuthorCollaborations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: organizationId
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *       - name: collaborationId
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Collaboration rejected
+ */
+
+/**
+ * @swagger
+ * /auth/organizations/{organizationId}/author-collaborations/{collaborationId}/negotiate:
+ *   patch:
+ *     summary: Negotiate a collaboration request with an organization counter-offer
+ *     tags: [AuthorCollaborations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: organizationId
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *       - name: collaborationId
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/NegotiateCollaborationRequest'
+ *     responses:
+ *       200:
+ *         description: Negotiation terms submitted
+ */
+
 export {};
