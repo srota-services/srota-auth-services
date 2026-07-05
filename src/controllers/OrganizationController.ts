@@ -13,6 +13,7 @@ import {
    OrganizationTeamSizeType,
    UpdateOrganizationDto,
 } from '../models/OrganizationDto';
+import { parseRequestBoolean } from '../utils/parseRequestBoolean';
 
 function parseOptionalString(value: unknown): string | undefined {
    if (value === undefined || value === null || typeof value !== 'string') {
@@ -24,8 +25,9 @@ function parseOptionalString(value: unknown): string | undefined {
 function parseProfileFieldsFromBody(
    body: Record<string, unknown>,
    isUpdate: boolean,
-): Pick<CreateOrganizationDto, 'preferredGenre' | 'websiteUrl' | 'teamSize'> {
-   const result: Pick<CreateOrganizationDto, 'preferredGenre' | 'websiteUrl' | 'teamSize'> = {};
+): Pick<CreateOrganizationDto, 'preferredGenre' | 'websiteUrl' | 'teamSize' | 'discoverable'> {
+   const result: Pick<CreateOrganizationDto, 'preferredGenre' | 'websiteUrl' | 'teamSize' | 'discoverable'> =
+      {};
 
    if (body['preferredGenre'] !== undefined) {
       const preferredGenre = parseOptionalString(body['preferredGenre']);
@@ -51,6 +53,13 @@ function parseProfileFieldsFromBody(
          result.teamSize = teamSize && teamSize.length > 0 ? (teamSize as OrganizationTeamSizeType) : null;
       } else if (teamSize && teamSize.length > 0) {
          result.teamSize = teamSize as OrganizationTeamSizeType;
+      }
+   }
+
+   if (body['discoverable'] !== undefined) {
+      const discoverable = parseRequestBoolean(body['discoverable']);
+      if (discoverable !== undefined) {
+         result.discoverable = discoverable;
       }
    }
 
