@@ -211,6 +211,70 @@ const options: swaggerJsdoc.Options = {
                   accept: { type: 'boolean' },
                },
             },
+            AuthorOrganizationCollaborationForAuthor: {
+               type: 'object',
+               properties: {
+                  id: { type: 'string' },
+                  status: {
+                     type: 'string',
+                     enum: ['PENDING_ORG_REVIEW', 'NEGOTIATION', 'ACCEPTED', 'REJECTED', 'ABORTED'],
+                  },
+                  organization: { $ref: '#/components/schemas/InvitationOrganizationSummary' },
+                  description: { type: 'string', nullable: true },
+                  authorBudget: { type: 'number' },
+                  organizationAsk: { type: 'number', nullable: true },
+                  acceptedBudget: { type: 'number', nullable: true },
+                  currency: { type: 'string', example: 'USD' },
+                  turn: { type: 'string', enum: ['AUTHOR', 'ORGANIZATION'] },
+                  negotiationExpiresAt: { type: 'string', format: 'date-time', nullable: true },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' },
+               },
+            },
+            AuthorOrganizationCollaborationForOrg: {
+               type: 'object',
+               properties: {
+                  id: { type: 'string' },
+                  status: {
+                     type: 'string',
+                     enum: ['PENDING_ORG_REVIEW', 'NEGOTIATION', 'ACCEPTED', 'REJECTED', 'ABORTED'],
+                  },
+                  author: { $ref: '#/components/schemas/InvitationAuthorSummary' },
+                  description: { type: 'string', nullable: true },
+                  authorBudget: { type: 'number' },
+                  organizationAsk: { type: 'number', nullable: true },
+                  acceptedBudget: { type: 'number', nullable: true },
+                  currency: { type: 'string', example: 'USD' },
+                  turn: { type: 'string', enum: ['AUTHOR', 'ORGANIZATION'] },
+                  negotiationExpiresAt: { type: 'string', format: 'date-time', nullable: true },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' },
+               },
+            },
+            CreateAuthorOrganizationCollaborationRequest: {
+               type: 'object',
+               required: ['organizationId', 'authorBudget', 'currency'],
+               properties: {
+                  organizationId: { type: 'string' },
+                  description: { type: 'string' },
+                  authorBudget: { type: 'number', minimum: 0.01 },
+                  currency: { type: 'string', example: 'USD' },
+               },
+            },
+            CounterCollaborationBudgetRequest: {
+               type: 'object',
+               required: ['authorBudget'],
+               properties: {
+                  authorBudget: { type: 'number', minimum: 0.01 },
+               },
+            },
+            NegotiateCollaborationRequest: {
+               type: 'object',
+               required: ['organizationAsk'],
+               properties: {
+                  organizationAsk: { type: 'number', minimum: 0.01 },
+               },
+            },
             OrganizationMember: {
                type: 'object',
                properties: {
@@ -592,6 +656,7 @@ const options: swaggerJsdoc.Options = {
          { name: 'Organizations', description: 'Organization CRUD and membership' },
          { name: 'Authors', description: 'Author profiles and org links' },
          { name: 'AuthorInvitations', description: 'Step-by-step author organization invitations' },
+         { name: 'AuthorCollaborations', description: 'Author-initiated organization collaboration requests' },
          { name: 'Catalog', description: 'Public catalog reads for cross-service hydration' },
          { name: 'SubscriptionPlans', description: 'Subscription plan management' },
          { name: 'Subscriptions', description: 'User subscription lifecycle' },

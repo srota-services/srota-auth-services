@@ -183,6 +183,21 @@ jest.mock('@prisma/client', () => {
          DECLINED: 'DECLINED',
          ACCEPTED: 'ACCEPTED',
       },
+      AuthorOrganizationCollaborationStatus: {
+         PENDING_ORG_REVIEW: 'PENDING_ORG_REVIEW',
+         NEGOTIATION: 'NEGOTIATION',
+         ACCEPTED: 'ACCEPTED',
+         REJECTED: 'REJECTED',
+         ABORTED: 'ABORTED',
+      },
+      CollaborationActor: {
+         AUTHOR: 'AUTHOR',
+         ORGANIZATION: 'ORGANIZATION',
+      },
+      CollaborationTurn: {
+         AUTHOR: 'AUTHOR',
+         ORGANIZATION: 'ORGANIZATION',
+      },
    };
 });
 

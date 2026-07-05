@@ -351,6 +351,7 @@ model Organization {
    members OrganizationMember[]
    authors AuthorOrganization[]
    authorInvitations AuthorOrganizationInvitation[]
+   authorCollaborations AuthorOrganizationCollaboration[]
 
    @@map("organizations")
 }
@@ -366,6 +367,7 @@ model Author {
    user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
    organizations AuthorOrganization[]
    organizationInvitations AuthorOrganizationInvitation[]
+   organizationCollaborations AuthorOrganizationCollaboration[]
 
    @@map("authors")
 }
@@ -402,6 +404,83 @@ model AuthorOrganizationInvitation {
    @@index([authorId, status])
    @@index([organizationId, status])
    @@map("author_organization_invitations")
+}
+
+enum AuthorOrganizationCollaborationStatus {
+   PENDING_ORG_REVIEW
+   NEGOTIATION
+   ACCEPTED
+   REJECTED
+   ABORTED
+}
+
+enum CollaborationActor {
+   AUTHOR
+   ORGANIZATION
+}
+
+enum CollaborationTurn {
+   AUTHOR
+   ORGANIZATION
+}
+
+model AuthorOrganizationCollaboration {
+   id                   String                              @id @default(cuid())
+   organizationId       String
+   authorId             String
+   description          String?
+   authorBudget         Decimal                             @db.Decimal(12, 2)
+   organizationAsk      Decimal?                            @db.Decimal(12, 2)
+   acceptedBudget       Decimal?                            @db.Decimal(12, 2)
+   currency             String
+   status               AuthorOrganizationCollaborationStatus
+   turn                 CollaborationTurn
+   negotiationExpiresAt DateTime?
+   rejectedAt           DateTime?
+   acceptedAt           DateTime?
+   abortedAt            DateTime?
+   createdAt            DateTime                            @default(now())
+   updatedAt            DateTime                            @updatedAt
+
+   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+   author       Author       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+   attachments  AuthorOrganizationCollaborationAttachment[]
+   rounds       AuthorOrganizationCollaborationRound[]
+
+   @@unique([authorId, organizationId])
+   @@index([organizationId, status])
+   @@index([authorId, status])
+   @@map("author_organization_collaborations")
+}
+
+model AuthorOrganizationCollaborationAttachment {
+   id              String             @id @default(cuid())
+   collaborationId String
+   storageKey      String
+   originalName    String
+   mimeType        String
+   sizeBytes       Int
+   uploadedBy      CollaborationActor
+   createdAt       DateTime           @default(now())
+
+   collaboration AuthorOrganizationCollaboration @relation(fields: [collaborationId], references: [id], onDelete: Cascade)
+
+   @@index([collaborationId])
+   @@map("author_organization_collaboration_attachments")
+}
+
+model AuthorOrganizationCollaborationRound {
+   id              String             @id @default(cuid())
+   collaborationId String
+   actor           CollaborationActor
+   authorBudget    Decimal?           @db.Decimal(12, 2)
+   organizationAsk Decimal?           @db.Decimal(12, 2)
+   createdAt       DateTime           @default(now())
+
+   collaboration AuthorOrganizationCollaboration @relation(fields: [collaborationId], references: [id], onDelete: Cascade)
+
+   @@index([collaborationId])
+   @@map("author_organization_collaboration_rounds")
 }
 
 model OrganizationMember {
