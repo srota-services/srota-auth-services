@@ -17,6 +17,7 @@ export const domainMessages = {
       authors: {
          retrieved: 'Authors retrieved successfully',
          retrieved_by_id: 'Author retrieved successfully',
+         discoverable_retrieved: 'Discoverable authors retrieved successfully',
          created: 'Author created successfully',
          updated: 'Author updated successfully',
          deleted: 'Author deleted successfully',
@@ -39,6 +40,20 @@ export const domainMessages = {
          accepted: 'Collaboration request accepted',
          rejected: 'Collaboration request rejected',
          negotiated: 'Negotiation terms submitted successfully',
+      },
+      organizationReviews: {
+         retrieved: 'Organization reviews retrieved successfully',
+         retrieved_by_id: 'Organization review retrieved successfully',
+         created: 'Organization review created successfully',
+         updated: 'Organization review updated successfully',
+         deleted: 'Organization review deleted successfully',
+      },
+      authorReviews: {
+         retrieved: 'Author reviews retrieved successfully',
+         retrieved_by_id: 'Author review retrieved successfully',
+         created: 'Author review created successfully',
+         updated: 'Author review updated successfully',
+         deleted: 'Author review deleted successfully',
       },
    },
    error: {
@@ -104,9 +119,32 @@ export const domainMessages = {
          author_user_id_required: 'Author user ID is required',
          author_first_name_required: 'Author first name is required',
          author_last_name_required: 'Author last name is required',
+         organization_id_required: 'Organization ID is required',
+         author_id_required: 'Author ID is required',
+         review_rating_invalid: 'Rating must be an integer between 1 and 5',
+         description_length: 'Description must be 2000 characters or less',
+         update_field_required: 'At least one field must be provided for update',
       },
       users: {
          not_found: 'User not found',
+      },
+      reviews: {
+         guest_forbidden: 'Guests cannot create or modify reviews',
+         reviewer_author_required: 'An author profile is required to submit this review',
+         reviewer_organization_required: 'Organization admin access is required to submit this review',
+         reviewer_not_allowed: 'Your account type cannot submit reviews',
+      },
+      organizationReviews: {
+         not_found: 'Organization review not found',
+         already_exists: 'You have already reviewed this organization',
+         access_denied: 'You can only modify your own organization reviews',
+         member_review_forbidden: 'Organization members cannot review their organization',
+      },
+      authorReviews: {
+         not_found: 'Author review not found',
+         already_exists: 'You have already reviewed this author',
+         access_denied: 'You can only modify your own author reviews',
+         self_review_forbidden: 'Authors cannot review themselves',
       },
    },
 } as const;

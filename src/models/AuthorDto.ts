@@ -14,9 +14,22 @@ export interface AuthorDto {
    lastName?: string | null;
    address?: string | null;
    contact?: string | null;
+   avatar?: string | null;
+   discoverable?: boolean;
+   imageAssets?: Record<string, string>;
    organizations?: OrganizationSummary[];
    createdAt: Date;
    updatedAt: Date;
+}
+
+export interface DiscoverableAuthorDto {
+   authorId: string;
+   slug: string;
+   firstName?: string | null;
+   lastName?: string | null;
+   avatar?: string | null;
+   discoverable: boolean;
+   imageAssets?: Record<string, string>;
 }
 
 export interface CreateAuthorDto {
@@ -34,6 +47,8 @@ export interface UpdateAuthorDto {
    address?: string;
    contact?: string;
    organizationIds?: string[];
+   avatar?: string | null;
+   discoverable?: boolean;
 }
 
 type AuthorWithRelations = Prisma.AuthorGetPayload<{
@@ -75,6 +90,8 @@ export function toAuthorDto(author: PrismaAuthor | AuthorWithRelations): AuthorD
       lastName: user?.lastName ?? null,
       address: user?.address ?? null,
       contact: user?.contact ?? null,
+      avatar: author.avatar ?? null,
+      discoverable: author.discoverable ?? false,
       createdAt: author.createdAt,
       updatedAt: author.updatedAt,
    };

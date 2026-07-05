@@ -74,6 +74,14 @@ function keysForResource(
          keys.push(['authors', 'me', 'organization-collaborations']);
          return keys;
       }
+      case 'organization-review': {
+         const orgId = relatedIds['organizationId'] ?? id;
+         return [['organization-reviews'], ['organization-reviews', orgId], ['organizations', orgId]];
+      }
+      case 'author-review': {
+         const authorId = relatedIds['authorId'] ?? id;
+         return [['author-reviews'], ['author-reviews', authorId], ['authors', authorId]];
+      }
       case 'subscription-plan':
          return [['subscription-plans'], ['subscription-plans', id]];
       case 'user-subscription':

@@ -1,7 +1,6 @@
 import { PrismaClient, User, Role, OtpPurpose } from '@prisma/client';
 import { PasswordUtils, TokenUtils } from '../utils/crypto';
 import { redisService } from './redis';
-import { rabbitmqService } from './rabbitmq';
 import { googleOAuthService } from './google-oauth';
 import { otpService } from './otp';
 import { userDeviceService } from './userDevice';
@@ -15,7 +14,7 @@ import { buildGuestEmail, isGuestEmail } from '../constants/guestUser';
 import { AuthorService } from './AuthorService';
 import { OrganizationService } from './OrganizationService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
-import { toUserResponse } from './userProfile';
+import { toUserResponse, userProfileService } from './userProfile';
 import {
    RegisterRequest,
    LoginRequest,
@@ -219,18 +218,20 @@ export class AuthService {
 
          emitCacheInvalidation('author', 'created', author.id);
 
+         if (pendingAuthor.profileImage) {
+            try {
+               await authorService.applyAuthorAvatarFromSource(author.id, pendingAuthor.profileImage);
+            } catch (error) {
+               appLogger.error({ err: error }, 'Failed to persist author registration avatar');
+            }
+         }
+
          const authResponse = await this.issueAuthTokens(updatedUser, data.device, data.meta);
 
          try {
-            await rabbitmqService.publishAuthorCreated({
-               authorId: author.id,
-               ...(pendingAuthor.profileImage !== undefined
-                  ? { avatar: pendingAuthor.profileImage }
-                  : {}),
-            });
-            emitCacheInvalidation('author', 'created', author.id);
+            await authorService.bootstrapDefaultAuthorTier(author.id);
          } catch (error) {
-            appLogger.error({ err: error }, 'Failed to publish author created event');
+            appLogger.error({ err: error }, 'Failed to bootstrap author tier');
          } finally {
             await redisService.deletePendingAuthorRegistration(updatedUser.id);
          }
@@ -256,15 +257,16 @@ export class AuthService {
          }),
       );
 
+      await userProfileService.initializeUserProfile(updatedUser.id, {
+         ...(pendingUser.avatar ? { avatar: pendingUser.avatar } : {}),
+      });
+
       const authResponse = await this.issueAuthTokens(updatedUser, data.device, data.meta);
 
       try {
-         await rabbitmqService.publishUserCreated({
-            userId: updatedUser.id,
-         });
          emitCacheInvalidation('user', 'created', updatedUser.id);
       } catch (error) {
-         appLogger.error({ err: error }, 'Failed to publish user created event');
+         appLogger.error({ err: error }, 'Failed to emit user created cache event');
       } finally {
          await redisService.deletePendingUserRegistration(updatedUser.id);
       }
@@ -702,13 +704,10 @@ export class AuthService {
          );
 
          try {
-            await rabbitmqService.publishUserCreated({
-               userId: user.id,
-            });
+            await userProfileService.initializeUserProfile(user.id);
             emitCacheInvalidation('user', 'created', user.id);
          } catch (error) {
-            appLogger.error({ err: error }, 'Failed to publish user created event');
-            // Don't fail registration if RabbitMQ publishing fails
+            appLogger.error({ err: error }, 'Failed to initialize user profile');
          }
       }
 
@@ -743,6 +742,10 @@ export class AuthService {
          }),
       );
 
+      if (!existingDevice?.user) {
+         await userProfileService.initializeUserProfile(user.id);
+      }
+
       return this.issueAuthTokens(user, device, data.meta);
    }
 
@@ -750,15 +753,11 @@ export class AuthService {
     * Get user by ID
     */
    async getUserById(userId: string): Promise<UserResponse | null> {
-      const user = await prisma.user.findUnique({
-         where: { id: userId },
-      });
-
-      if (!user) {
+      try {
+         return await userProfileService.getUserProfile(userId);
+      } catch {
          return null;
       }
-
-      return toUserResponse(user);
    }
 
    /**

@@ -233,6 +233,68 @@
  *                 id: "cauthor1234567890abcdefgh"
  *                 slug: "jane-doe-a1b2c3d4"
  *                 userId: "cuser1234567890abcdefghij"
+ *                 avatar: "https://cdn.example.com/avatar.jpg"
+ *                 discoverable: true
+ *   put:
+ *     summary: Update my author profile
+ *     tags: [Authors]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               profileImage:
+ *                 type: string
+ *                 format: binary
+ *               discoverable:
+ *                 type: boolean
+ *               firstName: { type: string }
+ *               lastName: { type: string }
+ *     responses:
+ *       200:
+ *         description: Author profile updated
+ */
+
+/**
+ * @swagger
+ * /auth/catalog/authors/discoverable:
+ *   get:
+ *     summary: List discoverable authors
+ *     description: Paginated list of authors who opted in to marketplace discovery.
+ *     tags: [Catalog]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: page
+ *         in: query
+ *         schema: { type: integer, minimum: 1, default: 1 }
+ *       - name: limit
+ *         in: query
+ *         schema: { type: integer, minimum: 1, maximum: 100, default: 10 }
+ *     responses:
+ *       200:
+ *         description: Discoverable authors
+ *         content:
+ *           application/json:
+ *             example:
+ *               message: "Discoverable authors retrieved successfully"
+ *               authors:
+ *                 - authorId: "cauthor1234567890abcdefgh"
+ *                   slug: "jane-doe-a1b2c3d4"
+ *                   firstName: "Jane"
+ *                   lastName: "Doe"
+ *                   avatar: "https://cdn.example.com/avatar.jpg"
+ *                   discoverable: true
+ *               pagination:
+ *                 page: 1
+ *                 limit: 10
+ *                 totalCount: 1
+ *                 totalPages: 1
+ *                 hasNextPage: false
+ *                 hasPrevPage: false
  */
 
 /**

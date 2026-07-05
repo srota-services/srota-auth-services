@@ -18,6 +18,7 @@ import { rethrowServiceError } from '../utils/serviceError';
 import { rabbitmqService } from './rabbitmq';
 import { mediaCleanupService } from './MediaCleanupService';
 import { ImageAssetService } from './ImageAssetService';
+import { OrganizationTierService } from './OrganizationTierService';
 import { emitCacheInvalidation } from './DomainEventPublisher';
 import {
    AuthRole,
@@ -61,9 +62,11 @@ export function hasOrgStaffAccess(
 
 export class OrganizationService {
    private imageAssetService: ImageAssetService;
+   private organizationTierService: OrganizationTierService;
 
    constructor(private prisma: PrismaClient) {
       this.imageAssetService = new ImageAssetService(prisma);
+      this.organizationTierService = new OrganizationTierService(prisma);
    }
 
    async createOrganization(
@@ -113,6 +116,8 @@ export class OrganizationService {
             return created;
          });
 
+         await this.organizationTierService.createDefaultForOrganization(organization.id);
+
          if (imageSourcePath) {
             const { primaryStorageKey } = await this.imageAssetService.generateAndStoreVariants(
                'organization',
@@ -126,20 +131,10 @@ export class OrganizationService {
                }),
             );
             emitCacheInvalidation('organization', 'created', organization.id);
-            try {
-               await rabbitmqService.publishOrganizationCreated({ organizationId: organization.id });
-            } catch (publishError) {
-               rethrowServiceError(publishError, { operation: 'createOrganization.publishOrganizationCreated' }, msg.create_failed);
-            }
             return fileUrlService.resolveOrganizationMedia(toOrganizationDto(updated));
          }
 
          emitCacheInvalidation('organization', 'created', organization.id);
-         try {
-            await rabbitmqService.publishOrganizationCreated({ organizationId: organization.id });
-         } catch (publishError) {
-            rethrowServiceError(publishError, { operation: 'createOrganization.publishOrganizationCreated' }, msg.create_failed);
-         }
          return fileUrlService.resolveOrganizationMedia(toOrganizationDto(organization));
       } catch (error) {
          rethrowServiceError(error, { operation: 'createOrganization' }, msg.create_failed);

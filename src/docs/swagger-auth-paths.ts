@@ -500,7 +500,7 @@
  * /auth/user/profile:
  *   get:
  *     summary: Get current user profile
- *     description: Returns demographic profile fields stored on the auth User model.
+ *     description: Returns unified profile fields (demographics, username, avatar, preferences) on the auth User model.
  *     tags: [Auth]
  *     security:
  *       - bearerAuth: []
@@ -565,6 +565,34 @@
  *         $ref: '#/components/responses/Unauthorized'
  *       403:
  *         description: Guest attempted to update non-location profile fields
+ */
+
+/**
+ * @swagger
+ * /auth/users/{userId}/profile:
+ *   get:
+ *     summary: Get public user profile
+ *     description: Returns username and avatar for a user by auth user ID.
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Public profile
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 profile:
+ *                   $ref: '#/components/schemas/PublicUserProfile'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
  */
 
 /**

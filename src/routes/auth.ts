@@ -16,6 +16,7 @@ import {
 import { handleAuthorRegistrationUpload } from '../middleware/RegisterUploadMiddleware';
 import { validateUserProfileUpdate } from '../middleware/profileValidation';
 import { userProfileController } from '../controllers/userProfile';
+import { handleOptionalUserAvatarUpload } from '../middleware/ProfileUploadMiddleware';
 
 const router = Router();
 
@@ -58,9 +59,11 @@ protectedRouter.get('/me', authController.getMe.bind(authController));
 protectedRouter.get('/user/profile', userProfileController.getProfile.bind(userProfileController));
 protectedRouter.put(
    '/user/profile',
+   handleOptionalUserAvatarUpload,
    validateUserProfileUpdate,
    userProfileController.updateProfile.bind(userProfileController),
 );
+protectedRouter.get('/users/:userId/profile', userProfileController.getPublicProfile.bind(userProfileController));
 protectedRouter.get('/user/:userId', authController.getRole.bind(authController));
 protectedRouter.get('/request-password-change-otp', authController.requestPasswordChangeOTP.bind(authController));
 protectedRouter.post('/verify-password-change-otp', authController.verifyPasswordChangeOTP.bind(authController));

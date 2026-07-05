@@ -58,6 +58,9 @@ model User {
    gender        Gender?
    location      String?
    age           Int?
+   username      String?  @unique
+   avatar        String?
+   preferences   Json?
    createdAt     DateTime @default(now())
    updatedAt     DateTime @updatedAt
 
@@ -334,6 +337,20 @@ enum AuthorOrganizationInvitationStatus {
    ACCEPTED
 }
 
+enum ReputationTierLevel {
+   TIER_1
+   TIER_2
+   TIER_3
+   TIER_4
+   TIER_5
+}
+
+enum ReviewerType {
+   USER
+   AUTHOR
+   ORGANIZATION
+}
+
 model Organization {
    id             String                @id @default(cuid())
    name           String
@@ -352,14 +369,18 @@ model Organization {
    authors AuthorOrganization[]
    authorInvitations AuthorOrganizationInvitation[]
    authorCollaborations AuthorOrganizationCollaboration[]
+   tier     OrganizationTier?
+   reviews  OrganizationReview[]
 
    @@map("organizations")
 }
 
 model Author {
-   id     String @id @default(cuid())
-   userId String @unique
-   slug   String @unique
+   id           String  @id @default(cuid())
+   userId       String  @unique
+   slug         String  @unique
+   avatar       String?
+   discoverable Boolean @default(false)
 
    createdAt DateTime @default(now())
    updatedAt DateTime @updatedAt
@@ -368,8 +389,68 @@ model Author {
    organizations AuthorOrganization[]
    organizationInvitations AuthorOrganizationInvitation[]
    organizationCollaborations AuthorOrganizationCollaboration[]
+   tier     AuthorTier?
+   reviews  AuthorReview[]
 
    @@map("authors")
+}
+
+model OrganizationTier {
+   id             String              @id @default(cuid())
+   organizationId String              @unique
+   tier           ReputationTierLevel @default(TIER_3)
+   createdAt      DateTime            @default(now())
+   updatedAt      DateTime            @updatedAt
+
+   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+   @@map("organization_tiers")
+}
+
+model AuthorTier {
+   id        String              @id @default(cuid())
+   authorId  String              @unique
+   tier      ReputationTierLevel @default(TIER_3)
+   createdAt DateTime            @default(now())
+   updatedAt DateTime            @updatedAt
+
+   author Author @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+   @@map("author_tiers")
+}
+
+model OrganizationReview {
+   id             String       @id @default(cuid())
+   organizationId String
+   reviewerType   ReviewerType
+   reviewerId     String
+   rating         Int
+   description    String?
+   createdAt      DateTime     @default(now())
+   updatedAt      DateTime     @updatedAt
+
+   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+   @@unique([organizationId, reviewerType, reviewerId])
+   @@index([organizationId])
+   @@map("organization_reviews")
+}
+
+model AuthorReview {
+   id           String       @id @default(cuid())
+   authorId     String
+   reviewerType ReviewerType
+   reviewerId   String
+   rating       Int
+   description  String?
+   createdAt    DateTime     @default(now())
+   updatedAt    DateTime     @updatedAt
+
+   author Author @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+   @@unique([authorId, reviewerType, reviewerId])
+   @@index([authorId])
+   @@map("author_reviews")
 }
 
 model AuthorOrganization {
@@ -503,6 +584,8 @@ model OrganizationMember {
 
 enum ImageCategory {
    organization
+   author
+   user
 }
 
 model ImagePlaceholderSpec {

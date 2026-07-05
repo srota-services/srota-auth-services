@@ -34,6 +34,18 @@ jest.mock('@prisma/client', () => ({
       SIZE_51_200: 'SIZE_51_200',
       SIZE_200_PLUS: 'SIZE_200_PLUS',
    },
+   ReputationTierLevel: {
+      TIER_1: 'TIER_1',
+      TIER_2: 'TIER_2',
+      TIER_3: 'TIER_3',
+      TIER_4: 'TIER_4',
+      TIER_5: 'TIER_5',
+   },
+   ReviewerType: {
+      USER: 'USER',
+      AUTHOR: 'AUTHOR',
+      ORGANIZATION: 'ORGANIZATION',
+   },
 }));
 
 jest.mock('../../src/utils/crypto', () => ({
@@ -55,6 +67,14 @@ jest.mock('../../src/services/userDevice', () => ({
    },
 }));
 
+jest.mock('../../src/services/userProfile', () => ({
+   userProfileService: {
+      initializeUserProfile: jest.fn().mockResolvedValue({ id: 'guest-user-1', role: 'GUEST' }),
+      getUserProfile: jest.fn(),
+   },
+   toUserResponse: jest.fn((user) => user),
+}));
+
 jest.mock('../../src/services/google-oauth', () => ({
    googleOAuthService: {
       verifyGoogleToken: jest.fn(),
@@ -69,6 +89,7 @@ jest.mock('../../src/services/rabbitmq', () => ({
 
 import { AuthService } from '../../src/services/auth';
 import { GUEST_EMAIL_DOMAIN } from '../../src/constants/guestUser';
+import { userProfileService } from '../../src/services/userProfile';
 
 describe('AuthService createOrResumeGuestSession', () => {
    let authService: AuthService;
@@ -105,6 +126,7 @@ describe('AuthService createOrResumeGuestSession', () => {
             }),
          }),
       );
+      expect(userProfileService.initializeUserProfile).toHaveBeenCalledWith('guest-user-1');
       expect(result.accessToken).toBe('access-token');
       expect(result.user.role).toBe(Role.GUEST);
    });
@@ -125,6 +147,7 @@ describe('AuthService createOrResumeGuestSession', () => {
       const result = await authService.createOrResumeGuestSession({ device });
 
       expect(mockPrisma.user.create).not.toHaveBeenCalled();
+      expect(userProfileService.initializeUserProfile).not.toHaveBeenCalled();
       expect(result.user.id).toBe('guest-user-existing');
       expect(result.accessToken).toBe('access-token');
    });

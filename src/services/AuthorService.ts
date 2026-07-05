@@ -2,6 +2,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import {
    AuthorDto,
    CreateAuthorDto,
+   DiscoverableAuthorDto,
    UpdateAuthorDto,
    authorInclude,
    toAuthorDto,
@@ -13,12 +14,73 @@ import { runInTransaction, runWrite, type TransactionClient } from '../utils/pri
 import { rethrowServiceError } from '../utils/serviceError';
 import { rabbitmqService } from './rabbitmq';
 import { emitCacheInvalidation } from './DomainEventPublisher';
+import { fileUrlService } from './FileUrlService';
+import { ImageAssetService } from './ImageAssetService';
+import { mediaCleanupService } from './MediaCleanupService';
+import { ReputationCleanupService } from './ReputationCleanupService';
+import { AuthorTierService } from './AuthorTierService';
+import fs from 'fs';
+import path from 'path';
+import { config } from '../config/env';
 
 const msg = domainMessages.error.authors;
 const validationMsg = domainMessages.error.validation;
 
 export class AuthorService {
-   constructor(private prisma: PrismaClient) {}
+   private imageAssetService: ImageAssetService;
+   private authorTierService: AuthorTierService;
+
+   constructor(private prisma: PrismaClient) {
+      this.imageAssetService = new ImageAssetService(prisma);
+      this.authorTierService = new AuthorTierService(prisma);
+   }
+
+   async bootstrapDefaultAuthorTier(authorId: string): Promise<void> {
+      await this.authorTierService.createDefaultForAuthor(authorId);
+   }
+
+   private async resolveAuthorDto(author: AuthorDto): Promise<AuthorDto> {
+      const resolved = await fileUrlService.resolveAuthorMedia(author);
+      return {
+         ...resolved,
+         imageAssets: resolved.imageAssets,
+      };
+   }
+
+   private async resolveAuthorDtoList(authors: AuthorDto[]): Promise<AuthorDto[]> {
+      const resolved = await fileUrlService.resolveAuthorMediaList(authors);
+      return resolved.map((author) => ({
+         ...author,
+         imageAssets: author.imageAssets,
+      }));
+   }
+
+   private resolveRegistrationImagePath(stored: string): string {
+      const trimmed = stored.trim();
+      if (path.isAbsolute(trimmed) && fs.existsSync(trimmed)) {
+         return trimmed;
+      }
+
+      if (trimmed.startsWith('/uploads/')) {
+         const localPath = path.join(config.DEV_UPLOAD_DIR, trimmed.replace('/uploads/', ''));
+         if (fs.existsSync(localPath)) {
+            return localPath;
+         }
+      }
+
+      const key = fileUrlService.normalizeToS3Key(trimmed);
+      if (key && config.NODE_ENV === 'development') {
+         const localPath = path.join(
+            config.DEV_UPLOAD_DIR,
+            key.startsWith('uploads/') ? key.slice('uploads/'.length) : key,
+         );
+         if (fs.existsSync(localPath)) {
+            return localPath;
+         }
+      }
+
+      throw DomainError.validation('Invalid author profile image source');
+   }
 
    private async syncAuthorOrganizations(
       authorId: string,
@@ -85,7 +147,7 @@ export class AuthorService {
             include: authorInclude,
             orderBy: { createdAt: 'desc' },
          });
-         return authors.map((author) => toAuthorDto(author));
+         return this.resolveAuthorDtoList(authors.map((author) => toAuthorDto(author)));
       } catch (error) {
          rethrowServiceError(error, { operation: 'getAllAuthors' }, msg.fetch_failed);
       }
@@ -94,7 +156,7 @@ export class AuthorService {
    async getAuthorById(id: string): Promise<AuthorDto> {
       try {
          const author = await this.getAuthorRecord(id);
-         return toAuthorDto(author);
+         return this.resolveAuthorDto(toAuthorDto(author));
       } catch (error) {
          rethrowServiceError(error, { operation: 'getAuthorById' }, msg.fetch_failed);
       }
@@ -105,7 +167,10 @@ export class AuthorService {
          where: { userId },
          include: authorInclude,
       });
-      return author ? toAuthorDto(author) : null;
+      if (!author) {
+         return null;
+      }
+      return this.resolveAuthorDto(toAuthorDto(author));
    }
 
    async getAuthorBySlug(slug: string): Promise<AuthorDto | null> {
@@ -113,7 +178,147 @@ export class AuthorService {
          where: { slug },
          include: authorInclude,
       });
-      return author ? toAuthorDto(author) : null;
+      if (!author) {
+         return null;
+      }
+      return this.resolveAuthorDto(toAuthorDto(author));
+   }
+
+   async listDiscoverableAuthors(params: { page?: number; limit?: number } = {}): Promise<{
+      authors: DiscoverableAuthorDto[];
+      totalCount: number;
+   }> {
+      const page = Math.max(1, params.page ?? 1);
+      const limit = Math.min(100, Math.max(1, params.limit ?? 10));
+      const skip = (page - 1) * limit;
+
+      try {
+         const where = { discoverable: true };
+         const [authors, totalCount] = await Promise.all([
+            this.prisma.author.findMany({
+               where,
+               skip,
+               take: limit,
+               orderBy: { updatedAt: 'desc' },
+               include: authorInclude,
+            }),
+            this.prisma.author.count({ where }),
+         ]);
+
+         const dtos = await this.resolveAuthorDtoList(authors.map((author) => toAuthorDto(author)));
+         return {
+            authors: dtos.map((author) => ({
+               authorId: author.id,
+               slug: author.slug,
+               firstName: author.firstName ?? null,
+               lastName: author.lastName ?? null,
+               avatar: author.avatar ?? null,
+               discoverable: author.discoverable ?? true,
+               ...(author.imageAssets ? { imageAssets: author.imageAssets } : {}),
+            })),
+            totalCount,
+         };
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'listDiscoverableAuthors' }, msg.fetch_failed);
+      }
+   }
+
+   async applyAuthorAvatarFromSource(authorId: string, source: string): Promise<void> {
+      const localPath = this.resolveRegistrationImagePath(source);
+      try {
+         const { primaryStorageKey } = await this.imageAssetService.generateAndStoreVariants(
+            'author',
+            authorId,
+            localPath,
+         );
+         await runWrite(this.prisma, (tx) =>
+            tx.author.update({
+               where: { id: authorId },
+               data: { avatar: primaryStorageKey },
+            }),
+         );
+         emitCacheInvalidation('author', 'updated', authorId);
+      } finally {
+         if (localPath.includes('source-image-') && fs.existsSync(localPath)) {
+            fs.unlinkSync(localPath);
+         }
+      }
+   }
+
+   async updateMyAuthorProfile(
+      authorId: string,
+      data: UpdateAuthorDto,
+      avatarSourcePath?: string,
+   ): Promise<AuthorDto> {
+      try {
+         const existingAuthor = await this.prisma.author.findUnique({ where: { id: authorId } });
+         if (!existingAuthor) {
+            throw DomainError.notFound(msg.not_found);
+         }
+
+         if (data.discoverable !== undefined) {
+            const discoverable = data.discoverable;
+            await runWrite(this.prisma, (tx) =>
+               tx.author.update({
+                  where: { id: authorId },
+                  data: { discoverable },
+               }),
+            );
+         }
+
+         if (avatarSourcePath) {
+            const { primaryStorageKey } = await this.imageAssetService.generateAndStoreVariants(
+               'author',
+               authorId,
+               avatarSourcePath,
+            );
+            await runWrite(this.prisma, (tx) =>
+               tx.author.update({
+                  where: { id: authorId },
+                  data: { avatar: primaryStorageKey },
+               }),
+            );
+         } else if (data.avatar !== undefined) {
+            if (data.avatar !== existingAuthor.avatar) {
+               await this.imageAssetService.deleteAssetsForEntity('author', authorId);
+               await mediaCleanupService.deleteStoredFile(existingAuthor.avatar);
+            }
+            await runWrite(this.prisma, (tx) =>
+               tx.author.update({
+                  where: { id: authorId },
+                  data: { avatar: data.avatar ?? null },
+               }),
+            );
+         }
+
+         const userUpdates: Prisma.UserUpdateInput = {};
+         if (data.firstName !== undefined) {
+            userUpdates.firstName = data.firstName.trim();
+         }
+         if (data.lastName !== undefined) {
+            userUpdates.lastName = data.lastName.trim();
+         }
+         if (data.address !== undefined) {
+            userUpdates.address = data.address.trim() || null;
+         }
+         if (data.contact !== undefined) {
+            userUpdates.contact = data.contact.trim() || null;
+         }
+         if (Object.keys(userUpdates).length > 0) {
+            await runWrite(this.prisma, (tx) =>
+               tx.user.update({
+                  where: { id: existingAuthor.userId },
+                  data: userUpdates,
+               }),
+            );
+         }
+
+         emitCacheInvalidation('author', 'updated', authorId);
+         const record = await this.getAuthorRecord(authorId);
+         return this.resolveAuthorDto(toAuthorDto(record));
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'updateMyAuthorProfile' }, msg.update_failed);
+      }
    }
 
    async createAuthorForUser(
@@ -142,6 +347,7 @@ export class AuthorService {
       });
       if (!tx) {
          emitCacheInvalidation('author', 'created', author.id);
+         await this.authorTierService.createDefaultForAuthor(author.id);
       }
       return toAuthorDto(author);
    }
@@ -208,7 +414,7 @@ export class AuthorService {
 
          const created = await this.getAuthorRecord(author.id);
          emitCacheInvalidation('author', 'created', author.id);
-         return toAuthorDto(created);
+         return this.resolveAuthorDto(toAuthorDto(created));
       } catch (error) {
          rethrowServiceError(error, { operation: 'createAuthor' }, msg.create_failed);
       }
@@ -284,7 +490,7 @@ export class AuthorService {
 
          const updated = await this.getAuthorRecord(id);
          emitCacheInvalidation('author', 'updated', id);
-         return toAuthorDto(updated);
+         return this.resolveAuthorDto(toAuthorDto(updated));
       } catch (error) {
          rethrowServiceError(error, { operation: 'updateAuthor' }, msg.update_failed);
       }
@@ -298,6 +504,8 @@ export class AuthorService {
          }
 
          const { userId } = existingAuthor;
+         const reputationCleanup = new ReputationCleanupService(this.prisma);
+         await reputationCleanup.cleanupAuthorReputation(id);
          await runWrite(this.prisma, (tx) => tx.author.delete({ where: { id } }));
 
          try {

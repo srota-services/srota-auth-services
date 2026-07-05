@@ -33,6 +33,21 @@ export class CatalogController {
       }
    };
 
+   listDiscoverableAuthors = async (req: Request, res: Response): Promise<void> => {
+      try {
+         const page = req.query['page'] ? parseInt(req.query['page'] as string, 10) : 1;
+         const limit = req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : 10;
+         const result = await this.authorService.listDiscoverableAuthors({ page, limit });
+         res.status(200).json({
+            message: domainMessages.success.authors.discoverable_retrieved,
+            authors: result.authors,
+            pagination: calculatePagination(page, limit, result.totalCount),
+         });
+      } catch (error) {
+         handleDomainError(res, error);
+      }
+   };
+
    getOrganizationCatalog = async (req: Request, res: Response): Promise<void> => {
       try {
          const { id } = req.params as { id: string };

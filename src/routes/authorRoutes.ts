@@ -5,6 +5,7 @@ import { OrganizationController } from '../controllers/OrganizationController';
 import { AuthorOrganizationInvitationController } from '../controllers/AuthorOrganizationInvitationController';
 import { AuthorOrganizationCollaborationController } from '../controllers/AuthorOrganizationCollaborationController';
 import { handleOptionalCollaborationAttachmentsUpload } from '../middleware/CollaborationUploadMiddleware';
+import { handleOptionalAuthorProfileImageUpload } from '../middleware/ProfileUploadMiddleware';
 import { requireRole } from '../middleware';
 import { AuthRoleGroups } from '../constants/authRoles';
 
@@ -16,6 +17,12 @@ export function createAuthorRoutes(prisma: PrismaClient): Router {
    const collaborationController = new AuthorOrganizationCollaborationController(prisma);
 
    router.get('/me', authorController.getMyAuthor);
+   router.put(
+      '/me',
+      requireRole([...AuthRoleGroups.GLOBAL_ADMIN_OR_AUTHOR]),
+      handleOptionalAuthorProfileImageUpload,
+      authorController.updateMyAuthor,
+   );
    router.get('/me/organization-invitations', invitationController.listMyInvitations);
    router.post(
       '/me/organization-collaborations',

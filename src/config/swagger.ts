@@ -94,6 +94,9 @@ const options: swaggerJsdoc.Options = {
                   lastName: { type: 'string', nullable: true, example: 'Doe' },
                   address: { type: 'string', nullable: true },
                   contact: { type: 'string', nullable: true },
+                  avatar: { type: 'string', nullable: true, example: 'https://cdn.example.com/avatar.jpg' },
+                  discoverable: { type: 'boolean', default: false },
+                  imageAssets: { $ref: '#/components/schemas/ImageAssetsMap' },
                   organizations: {
                      type: 'array',
                      items: {
@@ -107,6 +110,93 @@ const options: swaggerJsdoc.Options = {
                   },
                   createdAt: { type: 'string', format: 'date-time' },
                   updatedAt: { type: 'string', format: 'date-time' },
+               },
+            },
+            DiscoverableAuthor: {
+               type: 'object',
+               properties: {
+                  authorId: { type: 'string', example: 'cauthor1234567890abcdefgh' },
+                  slug: { type: 'string', example: 'jane-doe-a1b2c3d4' },
+                  firstName: { type: 'string', nullable: true, example: 'Jane' },
+                  lastName: { type: 'string', nullable: true, example: 'Doe' },
+                  avatar: { type: 'string', nullable: true, example: 'https://cdn.example.com/avatar.jpg' },
+                  discoverable: { type: 'boolean', example: true },
+                  imageAssets: { $ref: '#/components/schemas/ImageAssetsMap' },
+               },
+            },
+            ReputationTierLevel: {
+               type: 'string',
+               enum: ['TIER_1', 'TIER_2', 'TIER_3', 'TIER_4', 'TIER_5'],
+            },
+            ReviewerType: {
+               type: 'string',
+               enum: ['USER', 'AUTHOR', 'ORGANIZATION'],
+            },
+            OrganizationReview: {
+               type: 'object',
+               properties: {
+                  id: { type: 'string' },
+                  organizationId: { type: 'string' },
+                  reviewerType: { $ref: '#/components/schemas/ReviewerType' },
+                  reviewerId: { type: 'string' },
+                  rating: { type: 'integer', minimum: 1, maximum: 5 },
+                  description: { type: 'string', nullable: true },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' },
+               },
+            },
+            CreateOrganizationReviewRequest: {
+               type: 'object',
+               required: ['organizationId', 'rating'],
+               properties: {
+                  organizationId: { type: 'string' },
+                  rating: { type: 'integer', minimum: 1, maximum: 5 },
+                  description: { type: 'string', maxLength: 2000 },
+               },
+            },
+            UpdateOrganizationReviewRequest: {
+               type: 'object',
+               properties: {
+                  rating: { type: 'integer', minimum: 1, maximum: 5 },
+                  description: { type: 'string', nullable: true, maxLength: 2000 },
+               },
+            },
+            AuthorReview: {
+               type: 'object',
+               properties: {
+                  id: { type: 'string' },
+                  authorId: { type: 'string' },
+                  reviewerType: { $ref: '#/components/schemas/ReviewerType' },
+                  reviewerId: { type: 'string' },
+                  rating: { type: 'integer', minimum: 1, maximum: 5 },
+                  description: { type: 'string', nullable: true },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' },
+               },
+            },
+            CreateAuthorReviewRequest: {
+               type: 'object',
+               required: ['authorId', 'rating'],
+               properties: {
+                  authorId: { type: 'string' },
+                  rating: { type: 'integer', minimum: 1, maximum: 5 },
+                  description: { type: 'string', maxLength: 2000 },
+               },
+            },
+            UpdateAuthorReviewRequest: {
+               type: 'object',
+               properties: {
+                  rating: { type: 'integer', minimum: 1, maximum: 5 },
+                  description: { type: 'string', nullable: true, maxLength: 2000 },
+               },
+            },
+            PublicUserProfile: {
+               type: 'object',
+               properties: {
+                  userId: { type: 'string' },
+                  username: { type: 'string' },
+                  avatar: { type: 'string', nullable: true },
+                  imageAssets: { $ref: '#/components/schemas/ImageAssetsMap' },
                },
             },
             InvitationOrganizationSummary: {
@@ -476,6 +566,10 @@ const options: swaggerJsdoc.Options = {
                            description: 'Resolved place name from coordinates',
                         },
                         age: { type: 'integer', example: 28 },
+                        username: { type: 'string', example: 'happy-tiger-1234' },
+                        avatar: { type: 'string', nullable: true },
+                        preferences: { type: 'object' },
+                        imageAssets: { $ref: '#/components/schemas/ImageAssetsMap' },
                         createdAt: { type: 'string', format: 'date-time' },
                         updatedAt: { type: 'string', format: 'date-time' },
                      },
@@ -511,6 +605,9 @@ const options: swaggerJsdoc.Options = {
                      description: 'Coordinates to resolve, or null to clear. Only field guests may update.',
                   },
                   age: { type: 'integer', nullable: true, minimum: 1, maximum: 150 },
+                  username: { type: 'string', minLength: 3, maxLength: 50 },
+                  preferences: { type: 'object', nullable: true },
+                  avatar: { type: 'string', nullable: true },
                },
             },
             AuthResponse: {
@@ -667,6 +764,8 @@ const options: swaggerJsdoc.Options = {
          { name: 'AuthorInvitations', description: 'Step-by-step author organization invitations' },
          { name: 'AuthorCollaborations', description: 'Author-initiated organization collaboration requests' },
          { name: 'Catalog', description: 'Public catalog reads for cross-service hydration' },
+         { name: 'OrganizationReviews', description: 'Organization reputation reviews' },
+         { name: 'AuthorReviews', description: 'Author reputation reviews' },
          { name: 'SubscriptionPlans', description: 'Subscription plan management' },
          { name: 'Subscriptions', description: 'User subscription lifecycle' },
          { name: 'Devices', description: 'Registered user devices' },

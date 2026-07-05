@@ -8,7 +8,7 @@ import { ImageProcessingService } from './ImageProcessingService';
 import { StorageFactory } from './storage/StorageFactory';
 import { fileUrlService } from './FileUrlService';
 import { mediaCleanupService } from './MediaCleanupService';
-import { AUTH_PRIMARY_VARIANT_KEY } from '../constants/imagePlaceholderSpecs';
+import { AUTH_PRIMARY_VARIANT_KEYS } from '../constants/imagePlaceholderSpecs';
 import { runWrite } from '../utils/prismaTransaction';
 
 export interface GenerateVariantsResult {
@@ -127,7 +127,8 @@ export class ImageAssetService {
          }
       }
 
-      const primaryStorageKey = variants[AUTH_PRIMARY_VARIANT_KEY]!;
+      const primaryVariantKey = AUTH_PRIMARY_VARIANT_KEYS[category];
+      const primaryStorageKey = variants[primaryVariantKey]!;
 
       return { primaryStorageKey, variants };
    }

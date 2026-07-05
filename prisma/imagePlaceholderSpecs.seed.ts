@@ -22,6 +22,10 @@ const AUTH_IMAGE_SPECS: SpecRow[] = [
       recommendedMaxWidth: 512,
       recommendedMaxHeight: 512,
    },
+   { category: 'user', variantKey: 'square_64', actualWidth: 256, actualHeight: 256, aspectRatioWidth: 1, aspectRatioHeight: 1, recommendedMaxWidth: 480, recommendedMaxHeight: 480 },
+   { category: 'user', variantKey: 'square_120', actualWidth: 480, actualHeight: 480, aspectRatioWidth: 1, aspectRatioHeight: 1, recommendedMaxWidth: 480, recommendedMaxHeight: 480 },
+   { category: 'author', variantKey: 'square_64', actualWidth: 256, actualHeight: 256, aspectRatioWidth: 1, aspectRatioHeight: 1, recommendedMaxWidth: 480, recommendedMaxHeight: 480 },
+   { category: 'author', variantKey: 'square_120', actualWidth: 480, actualHeight: 480, aspectRatioWidth: 1, aspectRatioHeight: 1, recommendedMaxWidth: 480, recommendedMaxHeight: 480 },
 ];
 
 export async function seedImagePlaceholderSpecs(prisma: PrismaClient): Promise<void> {
@@ -46,4 +50,8 @@ export async function seedImagePlaceholderSpecs(prisma: PrismaClient): Promise<v
    }
 }
 
-export const AUTH_PRIMARY_VARIANT_KEY = 'square_512';
+export const AUTH_PRIMARY_VARIANT_KEYS: Record<ImageCategory, string> = {
+   organization: 'square_512',
+   user: 'square_120',
+   author: 'square_120',
+};
