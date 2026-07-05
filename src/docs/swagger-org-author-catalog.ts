@@ -548,6 +548,44 @@
 
 /**
  * @swagger
+ * /auth/catalog/organizations/discoverable:
+ *   get:
+ *     summary: List discoverable organizations
+ *     description: Paginated list of organizations that opted in to marketplace discovery.
+ *     tags: [Catalog]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: page
+ *         in: query
+ *         schema: { type: integer, minimum: 1, default: 1 }
+ *       - name: limit
+ *         in: query
+ *         schema: { type: integer, minimum: 1, maximum: 100, default: 10 }
+ *     responses:
+ *       200:
+ *         description: Discoverable organizations
+ *         content:
+ *           application/json:
+ *             example:
+ *               message: "Discoverable organizations retrieved successfully"
+ *               organizations:
+ *                 - id: "corg1234567890abcdefghij"
+ *                   name: "Acme Publishing"
+ *                   slug: "acme-publishing"
+ *                   description: "Independent audiobook publisher"
+ *                   discoverable: true
+ *               pagination:
+ *                 page: 1
+ *                 limit: 10
+ *                 totalCount: 1
+ *                 totalPages: 1
+ *                 hasNextPage: false
+ *                 hasPrevPage: false
+ */
+
+/**
+ * @swagger
  * /auth/catalog/organizations/{id}:
  *   get:
  *     summary: Get organization catalog entry
