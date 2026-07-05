@@ -65,7 +65,7 @@ CREATE INDEX "author_organization_collaborations_organizationId_status_idx" ON "
 CREATE INDEX "author_organization_collaborations_authorId_status_idx" ON "author_organization_collaborations"("authorId", "status");
 
 -- CreateIndex
-CREATE INDEX "author_organization_collaboration_attachments_collaborationId_idx" ON "author_organization_collaboration_attachments"("collaborationId");
+CREATE INDEX "author_organization_collaboration_attachments_collaboration_idx" ON "author_organization_collaboration_attachments"("collaborationId");
 
 -- CreateIndex
 CREATE INDEX "author_organization_collaboration_rounds_collaborationId_idx" ON "author_organization_collaboration_rounds"("collaborationId");
@@ -77,7 +77,7 @@ ALTER TABLE "author_organization_collaborations" ADD CONSTRAINT "author_organiza
 ALTER TABLE "author_organization_collaborations" ADD CONSTRAINT "author_organization_collaborations_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "authors"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "author_organization_collaboration_attachments" ADD CONSTRAINT "author_organization_collaboration_attachments_collaborationId_fkey" FOREIGN KEY ("collaborationId") REFERENCES "author_organization_collaborations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "author_organization_collaboration_attachments" ADD CONSTRAINT "author_organization_collaboration_attachments_collaboratio_fkey" FOREIGN KEY ("collaborationId") REFERENCES "author_organization_collaborations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "author_organization_collaboration_rounds" ADD CONSTRAINT "author_organization_collaboration_rounds_collaborationId_fkey" FOREIGN KEY ("collaborationId") REFERENCES "author_organization_collaborations"("id") ON DELETE CASCADE ON UPDATE CASCADE;

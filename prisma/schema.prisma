@@ -463,9 +463,9 @@ model AuthorOrganizationCollaborationAttachment {
    uploadedBy      CollaborationActor
    createdAt       DateTime           @default(now())
 
-   collaboration AuthorOrganizationCollaboration @relation(fields: [collaborationId], references: [id], onDelete: Cascade)
+   collaboration AuthorOrganizationCollaboration @relation(fields: [collaborationId], references: [id], onDelete: Cascade, map: "author_organization_collaboration_attachments_collaboratio_fkey")
 
-   @@index([collaborationId])
+   @@index([collaborationId], map: "author_organization_collaboration_attachments_collaboration_idx")
    @@map("author_organization_collaboration_attachments")
 }
 
