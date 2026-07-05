@@ -97,6 +97,44 @@ export class AuthorController {
       }
    };
 
+   updateMyAuthor = async (req: Request, res: Response): Promise<void> => {
+      try {
+         const userId = getUserId(req);
+         const existing = await this.authorService.getAuthorByUserId(userId);
+         if (!existing) {
+            throw DomainError.notFound(domainMessages.error.authors.not_found);
+         }
+
+         const profileImageFile = (req as Request & { file?: Express.Multer.File }).file;
+         const discoverable =
+            req.body.discoverable !== undefined
+               ? req.body.discoverable === true || req.body.discoverable === 'true'
+               : undefined;
+
+         const updateData: UpdateAuthorDto = {
+            ...(req.body.firstName !== undefined ? { firstName: req.body.firstName } : {}),
+            ...(req.body.lastName !== undefined ? { lastName: req.body.lastName } : {}),
+            ...(req.body.address !== undefined ? { address: req.body.address } : {}),
+            ...(req.body.contact !== undefined ? { contact: req.body.contact } : {}),
+            ...(req.body.avatar !== undefined ? { avatar: req.body.avatar } : {}),
+            ...(discoverable !== undefined ? { discoverable } : {}),
+         };
+
+         const author = await this.authorService.updateMyAuthorProfile(
+            existing.id,
+            updateData,
+            profileImageFile?.path,
+         );
+
+         res.status(200).json({
+            message: domainMessages.success.authors.updated,
+            author,
+         });
+      } catch (error) {
+         handleDomainError(res, error);
+      }
+   };
+
    createAuthor = async (req: Request, res: Response): Promise<void> => {
       try {
          const authReq = req as AuthenticatedRequest;

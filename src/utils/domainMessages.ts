@@ -17,6 +17,7 @@ export const domainMessages = {
       authors: {
          retrieved: 'Authors retrieved successfully',
          retrieved_by_id: 'Author retrieved successfully',
+         discoverable_retrieved: 'Discoverable authors retrieved successfully',
          created: 'Author created successfully',
          updated: 'Author updated successfully',
          deleted: 'Author deleted successfully',

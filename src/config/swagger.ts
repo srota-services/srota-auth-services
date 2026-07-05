@@ -94,6 +94,9 @@ const options: swaggerJsdoc.Options = {
                   lastName: { type: 'string', nullable: true, example: 'Doe' },
                   address: { type: 'string', nullable: true },
                   contact: { type: 'string', nullable: true },
+                  avatar: { type: 'string', nullable: true, example: 'https://cdn.example.com/avatar.jpg' },
+                  discoverable: { type: 'boolean', default: false },
+                  imageAssets: { $ref: '#/components/schemas/ImageAssetsMap' },
                   organizations: {
                      type: 'array',
                      items: {
@@ -107,6 +110,27 @@ const options: swaggerJsdoc.Options = {
                   },
                   createdAt: { type: 'string', format: 'date-time' },
                   updatedAt: { type: 'string', format: 'date-time' },
+               },
+            },
+            DiscoverableAuthor: {
+               type: 'object',
+               properties: {
+                  authorId: { type: 'string', example: 'cauthor1234567890abcdefgh' },
+                  slug: { type: 'string', example: 'jane-doe-a1b2c3d4' },
+                  firstName: { type: 'string', nullable: true, example: 'Jane' },
+                  lastName: { type: 'string', nullable: true, example: 'Doe' },
+                  avatar: { type: 'string', nullable: true, example: 'https://cdn.example.com/avatar.jpg' },
+                  discoverable: { type: 'boolean', example: true },
+                  imageAssets: { $ref: '#/components/schemas/ImageAssetsMap' },
+               },
+            },
+            PublicUserProfile: {
+               type: 'object',
+               properties: {
+                  userId: { type: 'string' },
+                  username: { type: 'string' },
+                  avatar: { type: 'string', nullable: true },
+                  imageAssets: { $ref: '#/components/schemas/ImageAssetsMap' },
                },
             },
             InvitationOrganizationSummary: {
@@ -476,6 +500,10 @@ const options: swaggerJsdoc.Options = {
                            description: 'Resolved place name from coordinates',
                         },
                         age: { type: 'integer', example: 28 },
+                        username: { type: 'string', example: 'happy-tiger-1234' },
+                        avatar: { type: 'string', nullable: true },
+                        preferences: { type: 'object' },
+                        imageAssets: { $ref: '#/components/schemas/ImageAssetsMap' },
                         createdAt: { type: 'string', format: 'date-time' },
                         updatedAt: { type: 'string', format: 'date-time' },
                      },
@@ -511,6 +539,9 @@ const options: swaggerJsdoc.Options = {
                      description: 'Coordinates to resolve, or null to clear. Only field guests may update.',
                   },
                   age: { type: 'integer', nullable: true, minimum: 1, maximum: 150 },
+                  username: { type: 'string', minLength: 3, maxLength: 50 },
+                  preferences: { type: 'object', nullable: true },
+                  avatar: { type: 'string', nullable: true },
                },
             },
             AuthResponse: {

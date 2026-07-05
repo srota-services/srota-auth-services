@@ -150,6 +150,36 @@ export class FileUrlService {
    ): Promise<(T & { imageAssets: Record<string, string> })[]> {
       return Promise.all(dtos.map((dto) => this.resolveOrganizationMedia(dto)));
    }
+
+   async resolveAuthorMedia<T extends { id: string; avatar?: string | null }>(
+      dto: T,
+   ): Promise<T & { avatar?: string | null; imageAssets: Record<string, string> }> {
+      const avatar = await this.resolveForClient(dto.avatar);
+      const imageAssets = await this.imageAssetService.resolveAssetsForClient('author', dto.id);
+      return {
+         ...dto,
+         avatar: avatar ?? dto.avatar ?? null,
+         imageAssets,
+      };
+   }
+
+   async resolveAuthorMediaList<T extends { id: string; avatar?: string | null }>(
+      dtos: T[],
+   ): Promise<(T & { avatar?: string | null; imageAssets: Record<string, string> })[]> {
+      return Promise.all(dtos.map((dto) => this.resolveAuthorMedia(dto)));
+   }
+
+   async resolveUserMedia<T extends { id: string; avatar?: string | null }>(
+      dto: T,
+   ): Promise<T & { avatar?: string | null; imageAssets: Record<string, string> }> {
+      const avatar = await this.resolveForClient(dto.avatar);
+      const imageAssets = await this.imageAssetService.resolveAssetsForClient('user', dto.id);
+      return {
+         ...dto,
+         avatar: avatar ?? dto.avatar ?? null,
+         imageAssets,
+      };
+   }
 }
 
 export const fileUrlService = new FileUrlService();

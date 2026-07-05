@@ -74,6 +74,14 @@ jest.mock('../../src/services/otp', () => ({
    },
 }));
 
+jest.mock('../../src/services/userProfile', () => ({
+   userProfileService: {
+      initializeUserProfile: jest.fn().mockResolvedValue({ id: 'user-1' }),
+      getUserProfile: jest.fn(),
+   },
+   toUserResponse: jest.fn((user) => user),
+}));
+
 jest.mock('../../src/services/userDevice', () => ({
    userDeviceService: {
       resolveDeviceForAuth: jest.fn().mockResolvedValue({ id: 'device-1' }),
@@ -87,6 +95,7 @@ jest.mock('../../src/services/AuthorService', () => ({
          userId: 'author-user-1',
          slug: 'jane-doe-abc12345',
       }),
+      applyAuthorAvatarFromSource: jest.fn().mockResolvedValue(undefined),
    })),
 }));
 
@@ -99,6 +108,7 @@ jest.mock('../../src/services/google-oauth', () => ({
 import { AuthService } from '../../src/services/auth';
 import { redisService } from '../../src/services/redis';
 import { rabbitmqService } from '../../src/services/rabbitmq';
+import { userProfileService } from '../../src/services/userProfile';
 import { userDeviceService } from '../../src/services/userDevice';
 
 describe('AuthService register/verify author flow', () => {
@@ -198,7 +208,6 @@ describe('AuthService register/verify author flow', () => {
 
       expect(rabbitmqService.publishAuthorCreated).toHaveBeenCalledWith({
          authorId: 'author-1',
-         avatar: '/uploads/images/authors/image-1.jpg',
       });
       expect(rabbitmqService.publishUserCreated).not.toHaveBeenCalled();
       expect(redisService.deletePendingAuthorRegistration).toHaveBeenCalledWith('author-user-1');
@@ -280,9 +289,10 @@ describe('AuthService register/verify author flow', () => {
             }),
          }),
       );
-      expect(rabbitmqService.publishUserCreated).toHaveBeenCalledWith({
-         userId: 'user-1',
+      expect(userProfileService.initializeUserProfile).toHaveBeenCalledWith('user-1', {
+         avatar: 'uploads/images/users/avatar-1.jpg',
       });
+      expect(rabbitmqService.publishUserCreated).not.toHaveBeenCalled();
       expect(rabbitmqService.publishAuthorCreated).not.toHaveBeenCalled();
       expect(redisService.deletePendingUserRegistration).toHaveBeenCalledWith('user-1');
    });
