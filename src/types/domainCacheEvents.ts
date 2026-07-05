@@ -8,6 +8,8 @@ export type AuthDomainResource =
    | 'organization-member'
    | 'author-organization-invitation'
    | 'author-organization-collaboration'
+   | 'organization-review'
+   | 'author-review'
    | 'subscription-plan'
    | 'user-subscription'
    | 'subscription-catalog'

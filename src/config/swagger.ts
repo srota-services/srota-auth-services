@@ -124,6 +124,72 @@ const options: swaggerJsdoc.Options = {
                   imageAssets: { $ref: '#/components/schemas/ImageAssetsMap' },
                },
             },
+            ReputationTierLevel: {
+               type: 'string',
+               enum: ['TIER_1', 'TIER_2', 'TIER_3', 'TIER_4', 'TIER_5'],
+            },
+            ReviewerType: {
+               type: 'string',
+               enum: ['USER', 'AUTHOR', 'ORGANIZATION'],
+            },
+            OrganizationReview: {
+               type: 'object',
+               properties: {
+                  id: { type: 'string' },
+                  organizationId: { type: 'string' },
+                  reviewerType: { $ref: '#/components/schemas/ReviewerType' },
+                  reviewerId: { type: 'string' },
+                  rating: { type: 'integer', minimum: 1, maximum: 5 },
+                  description: { type: 'string', nullable: true },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' },
+               },
+            },
+            CreateOrganizationReviewRequest: {
+               type: 'object',
+               required: ['organizationId', 'rating'],
+               properties: {
+                  organizationId: { type: 'string' },
+                  rating: { type: 'integer', minimum: 1, maximum: 5 },
+                  description: { type: 'string', maxLength: 2000 },
+               },
+            },
+            UpdateOrganizationReviewRequest: {
+               type: 'object',
+               properties: {
+                  rating: { type: 'integer', minimum: 1, maximum: 5 },
+                  description: { type: 'string', nullable: true, maxLength: 2000 },
+               },
+            },
+            AuthorReview: {
+               type: 'object',
+               properties: {
+                  id: { type: 'string' },
+                  authorId: { type: 'string' },
+                  reviewerType: { $ref: '#/components/schemas/ReviewerType' },
+                  reviewerId: { type: 'string' },
+                  rating: { type: 'integer', minimum: 1, maximum: 5 },
+                  description: { type: 'string', nullable: true },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' },
+               },
+            },
+            CreateAuthorReviewRequest: {
+               type: 'object',
+               required: ['authorId', 'rating'],
+               properties: {
+                  authorId: { type: 'string' },
+                  rating: { type: 'integer', minimum: 1, maximum: 5 },
+                  description: { type: 'string', maxLength: 2000 },
+               },
+            },
+            UpdateAuthorReviewRequest: {
+               type: 'object',
+               properties: {
+                  rating: { type: 'integer', minimum: 1, maximum: 5 },
+                  description: { type: 'string', nullable: true, maxLength: 2000 },
+               },
+            },
             PublicUserProfile: {
                type: 'object',
                properties: {
@@ -698,6 +764,8 @@ const options: swaggerJsdoc.Options = {
          { name: 'AuthorInvitations', description: 'Step-by-step author organization invitations' },
          { name: 'AuthorCollaborations', description: 'Author-initiated organization collaboration requests' },
          { name: 'Catalog', description: 'Public catalog reads for cross-service hydration' },
+         { name: 'OrganizationReviews', description: 'Organization reputation reviews' },
+         { name: 'AuthorReviews', description: 'Author reputation reviews' },
          { name: 'SubscriptionPlans', description: 'Subscription plan management' },
          { name: 'Subscriptions', description: 'User subscription lifecycle' },
          { name: 'Devices', description: 'Registered user devices' },

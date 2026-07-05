@@ -17,6 +17,8 @@ import { emitCacheInvalidation } from './DomainEventPublisher';
 import { fileUrlService } from './FileUrlService';
 import { ImageAssetService } from './ImageAssetService';
 import { mediaCleanupService } from './MediaCleanupService';
+import { ReputationCleanupService } from './ReputationCleanupService';
+import { AuthorTierService } from './AuthorTierService';
 import fs from 'fs';
 import path from 'path';
 import { config } from '../config/env';
@@ -26,9 +28,15 @@ const validationMsg = domainMessages.error.validation;
 
 export class AuthorService {
    private imageAssetService: ImageAssetService;
+   private authorTierService: AuthorTierService;
 
    constructor(private prisma: PrismaClient) {
       this.imageAssetService = new ImageAssetService(prisma);
+      this.authorTierService = new AuthorTierService(prisma);
+   }
+
+   async bootstrapDefaultAuthorTier(authorId: string): Promise<void> {
+      await this.authorTierService.createDefaultForAuthor(authorId);
    }
 
    private async resolveAuthorDto(author: AuthorDto): Promise<AuthorDto> {
@@ -339,6 +347,7 @@ export class AuthorService {
       });
       if (!tx) {
          emitCacheInvalidation('author', 'created', author.id);
+         await this.authorTierService.createDefaultForAuthor(author.id);
       }
       return toAuthorDto(author);
    }
@@ -495,6 +504,8 @@ export class AuthorService {
          }
 
          const { userId } = existingAuthor;
+         const reputationCleanup = new ReputationCleanupService(this.prisma);
+         await reputationCleanup.cleanupAuthorReputation(id);
          await runWrite(this.prisma, (tx) => tx.author.delete({ where: { id } }));
 
          try {

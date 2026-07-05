@@ -1,7 +1,6 @@
 import { PrismaClient, User, Role, OtpPurpose } from '@prisma/client';
 import { PasswordUtils, TokenUtils } from '../utils/crypto';
 import { redisService } from './redis';
-import { rabbitmqService } from './rabbitmq';
 import { googleOAuthService } from './google-oauth';
 import { otpService } from './otp';
 import { userDeviceService } from './userDevice';
@@ -230,10 +229,9 @@ export class AuthService {
          const authResponse = await this.issueAuthTokens(updatedUser, data.device, data.meta);
 
          try {
-            await rabbitmqService.publishAuthorCreated({ authorId: author.id });
-            emitCacheInvalidation('author', 'created', author.id);
+            await authorService.bootstrapDefaultAuthorTier(author.id);
          } catch (error) {
-            appLogger.error({ err: error }, 'Failed to publish author created event');
+            appLogger.error({ err: error }, 'Failed to bootstrap author tier');
          } finally {
             await redisService.deletePendingAuthorRegistration(updatedUser.id);
          }

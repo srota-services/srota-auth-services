@@ -34,6 +34,18 @@ jest.mock('@prisma/client', () => ({
       SIZE_51_200: 'SIZE_51_200',
       SIZE_200_PLUS: 'SIZE_200_PLUS',
    },
+   ReputationTierLevel: {
+      TIER_1: 'TIER_1',
+      TIER_2: 'TIER_2',
+      TIER_3: 'TIER_3',
+      TIER_4: 'TIER_4',
+      TIER_5: 'TIER_5',
+   },
+   ReviewerType: {
+      USER: 'USER',
+      AUTHOR: 'AUTHOR',
+      ORGANIZATION: 'ORGANIZATION',
+   },
 }));
 
 jest.mock('../../src/utils/crypto', () => ({
@@ -96,6 +108,7 @@ jest.mock('../../src/services/AuthorService', () => ({
          slug: 'jane-doe-abc12345',
       }),
       applyAuthorAvatarFromSource: jest.fn().mockResolvedValue(undefined),
+      bootstrapDefaultAuthorTier: jest.fn().mockResolvedValue(undefined),
    })),
 }));
 
@@ -107,7 +120,7 @@ jest.mock('../../src/services/google-oauth', () => ({
 
 import { AuthService } from '../../src/services/auth';
 import { redisService } from '../../src/services/redis';
-import { rabbitmqService } from '../../src/services/rabbitmq';
+import { AuthorService } from '../../src/services/AuthorService';
 import { userProfileService } from '../../src/services/userProfile';
 import { userDeviceService } from '../../src/services/userDevice';
 
@@ -177,7 +190,7 @@ describe('AuthService register/verify author flow', () => {
       });
    });
 
-   test('should publish author.created after OTP verification for author users', async () => {
+   test('should bootstrap author tier after OTP verification for author users', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
          id: 'author-user-1',
          email: 'author@example.com',
@@ -206,10 +219,10 @@ describe('AuthService register/verify author flow', () => {
          device: { deviceId: 'device-1' },
       });
 
-      expect(rabbitmqService.publishAuthorCreated).toHaveBeenCalledWith({
-         authorId: 'author-1',
-      });
-      expect(rabbitmqService.publishUserCreated).not.toHaveBeenCalled();
+      const authorServiceInstance = (AuthorService as jest.Mock).mock.results[0]?.value as {
+         bootstrapDefaultAuthorTier: jest.Mock;
+      };
+      expect(authorServiceInstance.bootstrapDefaultAuthorTier).toHaveBeenCalledWith('author-1');
       expect(redisService.deletePendingAuthorRegistration).toHaveBeenCalledWith('author-user-1');
    });
 
@@ -292,8 +305,6 @@ describe('AuthService register/verify author flow', () => {
       expect(userProfileService.initializeUserProfile).toHaveBeenCalledWith('user-1', {
          avatar: 'uploads/images/users/avatar-1.jpg',
       });
-      expect(rabbitmqService.publishUserCreated).not.toHaveBeenCalled();
-      expect(rabbitmqService.publishAuthorCreated).not.toHaveBeenCalled();
       expect(redisService.deletePendingUserRegistration).toHaveBeenCalledWith('user-1');
    });
 });

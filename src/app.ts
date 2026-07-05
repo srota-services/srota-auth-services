@@ -12,6 +12,8 @@ import { createOrganizationRoutes } from './routes/organizationRoutes';
 import { OrganizationController } from './controllers/OrganizationController';
 import { createAuthorRoutes } from './routes/authorRoutes';
 import { createCatalogRoutes } from './routes/catalogRoutes';
+import { createOrganizationReviewRoutes } from './routes/organizationReviewRoutes';
+import { createAuthorReviewRoutes } from './routes/authorReviewRoutes';
 import { createDomainEventsRoutes } from './routes/domainEventsRoutes';
 import {
    errorHandler,
@@ -20,6 +22,7 @@ import {
    corsOptions,
    securityHeaders,
    authenticateToken,
+   blockGuestMutations,
 } from './middleware';
 import { redisService } from './services/redis';
 import { rabbitmqService } from './services/rabbitmq';
@@ -90,6 +93,8 @@ export const createApp = (): express.Application => {
    );
    app.use('/auth/authors', authenticateToken, createAuthorRoutes(prisma));
    app.use('/auth/catalog', authenticateToken, createCatalogRoutes(prisma));
+   app.use('/auth/organization-reviews', authenticateToken, blockGuestMutations(), createOrganizationReviewRoutes(prisma));
+   app.use('/auth/author-reviews', authenticateToken, blockGuestMutations(), createAuthorReviewRoutes(prisma));
    app.use('/auth/events', createDomainEventsRoutes());
 
    setupSwagger(app);
@@ -111,6 +116,8 @@ export const createApp = (): express.Application => {
             organizations: '/auth/organizations',
             authors: '/auth/authors',
             catalog: '/auth/catalog',
+            organizationReviews: '/auth/organization-reviews',
+            authorReviews: '/auth/author-reviews',
             events: '/auth/events/stream',
          },
       });
