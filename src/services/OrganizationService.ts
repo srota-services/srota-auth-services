@@ -146,6 +146,37 @@ export class OrganizationService {
       }
    }
 
+   async listDiscoverableOrganizations(params: { page?: number; limit?: number } = {}): Promise<{
+      organizations: OrganizationDto[];
+      totalCount: number;
+   }> {
+      const page = Math.max(1, params.page ?? 1);
+      const limit = Math.min(100, Math.max(1, params.limit ?? 10));
+      const skip = (page - 1) * limit;
+
+      try {
+         const where = { discoverable: true };
+         const [organizations, totalCount] = await Promise.all([
+            this.prisma.organization.findMany({
+               where,
+               skip,
+               take: limit,
+               orderBy: { name: 'asc' },
+               include: { _count: { select: { members: true } } },
+            }),
+            this.prisma.organization.count({ where }),
+         ]);
+
+         const dtos = organizations.map(toOrganizationDto);
+         return {
+            organizations: await fileUrlService.resolveOrganizationMediaList(dtos),
+            totalCount,
+         };
+      } catch (error) {
+         rethrowServiceError(error, { operation: 'listDiscoverableOrganizations' }, msg.fetch_failed);
+      }
+   }
+
    async listOrganizations(params: { page?: number; limit?: number } = {}): Promise<{
       organizations: OrganizationDto[];
       totalCount: number;
@@ -416,7 +447,17 @@ export class OrganizationService {
          }
          const members = await this.prisma.organizationMember.findMany({
             where: { organizationId },
-            include: { organization: true },
+            include: {
+               organization: true,
+               user: {
+                  select: {
+                     email: true,
+                     firstName: true,
+                     lastName: true,
+                     contact: true,
+                  },
+               },
+            },
             orderBy: { joinedAt: 'asc' },
          });
          return members.map(toOrganizationMemberDto);

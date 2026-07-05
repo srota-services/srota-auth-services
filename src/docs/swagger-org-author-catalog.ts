@@ -147,6 +147,28 @@
  *     responses:
  *       200:
  *         description: Member list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string }
+ *                 members:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/OrganizationMember' }
+ *             example:
+ *               message: "Organization members retrieved successfully"
+ *               members:
+ *                 - id: "cmember1234567890abcdefgh"
+ *                   userId: "cuser1234567890abcdefghij"
+ *                   organizationId: "corg1234567890abcdefghij"
+ *                   role: "OWNER"
+ *                   joinedAt: "2026-01-01T00:00:00.000Z"
+ *                   user:
+ *                     email: "jane@example.com"
+ *                     firstName: "Jane"
+ *                     lastName: "Doe"
+ *                     contact: "+15551234567"
  *   post:
  *     summary: Add organization member
  *     tags: [Organizations]
@@ -522,6 +544,44 @@
  *         description: Invalid invitation state
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
+ */
+
+/**
+ * @swagger
+ * /auth/catalog/organizations/discoverable:
+ *   get:
+ *     summary: List discoverable organizations
+ *     description: Paginated list of organizations that opted in to marketplace discovery.
+ *     tags: [Catalog]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: page
+ *         in: query
+ *         schema: { type: integer, minimum: 1, default: 1 }
+ *       - name: limit
+ *         in: query
+ *         schema: { type: integer, minimum: 1, maximum: 100, default: 10 }
+ *     responses:
+ *       200:
+ *         description: Discoverable organizations
+ *         content:
+ *           application/json:
+ *             example:
+ *               message: "Discoverable organizations retrieved successfully"
+ *               organizations:
+ *                 - id: "corg1234567890abcdefghij"
+ *                   name: "Acme Publishing"
+ *                   slug: "acme-publishing"
+ *                   description: "Independent audiobook publisher"
+ *                   discoverable: true
+ *               pagination:
+ *                 page: 1
+ *                 limit: 10
+ *                 totalCount: 1
+ *                 totalPages: 1
+ *                 hasNextPage: false
+ *                 hasPrevPage: false
  */
 
 /**

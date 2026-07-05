@@ -24,6 +24,13 @@ export interface OrganizationDto {
    memberCount?: number | undefined;
 }
 
+export interface OrganizationMemberUserSummary {
+   email: string;
+   firstName?: string | null;
+   lastName?: string | null;
+   contact?: string | null;
+}
+
 export interface OrganizationMemberDto {
    id: string;
    userId: string;
@@ -32,6 +39,7 @@ export interface OrganizationMemberDto {
    joinedAt: Date;
    createdAt: Date;
    updatedAt: Date;
+   user?: OrganizationMemberUserSummary;
    organization?: OrganizationDto | undefined;
 }
 
@@ -123,6 +131,7 @@ export function toOrganizationDto(organization: OrganizationRecord): Organizatio
 export function toOrganizationMemberDto(
    member: PrismaOrganizationMember & {
       organization?: PrismaOrganization;
+      user?: OrganizationMemberUserSummary;
    },
 ): OrganizationMemberDto {
    return {
@@ -133,6 +142,16 @@ export function toOrganizationMemberDto(
       joinedAt: member.joinedAt,
       createdAt: member.createdAt,
       updatedAt: member.updatedAt,
+      ...(member.user
+         ? {
+              user: {
+                 email: member.user.email,
+                 firstName: member.user.firstName ?? null,
+                 lastName: member.user.lastName ?? null,
+                 contact: member.user.contact ?? null,
+              },
+           }
+         : {}),
       organization: member.organization ? toOrganizationDto(member.organization) : undefined,
    };
 }

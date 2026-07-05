@@ -4,6 +4,7 @@ export const domainMessages = {
          created: 'Organization created successfully',
          retrieved: 'Organizations retrieved successfully',
          all_retrieved: 'All organizations retrieved successfully',
+         discoverable_retrieved: 'Discoverable organizations retrieved successfully',
          retrieved_by_id: 'Organization retrieved successfully',
          updated: 'Organization updated successfully',
          deleted: 'Organization deleted successfully',
